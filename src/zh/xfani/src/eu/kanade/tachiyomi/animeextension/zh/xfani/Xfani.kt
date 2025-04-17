@@ -117,10 +117,16 @@ class Xfani : AnimeHttpSource(), ConfigurableAnimeSource {
     }
 
     override fun animeDetailsParse(response: Response): SAnime {
-        val jsoup = response.asJsoup()
+        val doc = response.asJsoup()
         return SAnime.create().apply {
-            description = jsoup.select("#height_limit.text").text()
-            title = jsoup.select(".slide-info-title").text()
+            description = doc.select("#height_limit.text").text()
+            title = doc.select(".slide-info-title").text()
+            author = doc.select(".slide-info:contains(导演 :)").text().removePrefix("导演 :")
+                .removeSuffix(",")
+            artist = doc.select(".slide-info:contains(演员 :)").text().removePrefix("演员 :")
+                .removeSuffix(",")
+            genre = doc.select(".slide-info:contains(类型 :)").text().removePrefix("类型 :")
+                .removeSuffix(",").replace(",", ", ")
         }
     }
 
@@ -234,19 +240,13 @@ class Xfani : AnimeHttpSource(), ConfigurableAnimeSource {
             return vodListToAnimePageList(response)
         }
         val jsoup = response.asJsoup()
-        val items = jsoup.select("div.public-list-box.search-box.flex.rel")
+        val items = jsoup.select("div.search-list")
         val animeList = items.map { item ->
             SAnime.create().apply {
-                title = item.select(".thumb-txt").text()
-                url = item.select("div.left.public-list-bj a.public-list-exp").attr("href")
+                title = item.select("div.detail-info > a").text()
+                url = item.select("div.detail-info > a").attr("href")
                 thumbnail_url =
-                    item.select("div.left.public-list-bj img[data-src]").attr("data-src")
-                author = item.select("div.thumb-actor").text().removeSuffix("/")
-                artist = item.select("div.thumb-director").text().removeSuffix("/")
-                description = item.select(".thumb-blurb").text()
-                genre = item.select("div.thumb-else").text()
-                val statusString = item.select("div.left.public-list-bj .public-list-prb").text()
-                status = STATUS_STR_MAPPING.getOrElse(statusString) { SAnime.ONGOING }
+                    item.select("div.detail-pic img[data-src]").attr("data-src")
             }
         }
         val tip = jsoup.select("div.pages div.page-tip").text()
