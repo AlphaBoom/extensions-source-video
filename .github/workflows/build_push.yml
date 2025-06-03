@@ -3,7 +3,7 @@ name: CI
 on:
   push:
     branches:
-      - main
+      - release
     paths:
       - '**'
       - '!**.md'
@@ -28,8 +28,7 @@ jobs:
       - name: Clone repo
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
         with:
-          ref: main
-          token: ${{ secrets.BOT_PAT }}
+          ref: release
 
       # Temporary pause because of leak of tj-actions/changed-files
       # - name: Find lib changes
@@ -41,13 +40,13 @@ jobs:
       #     files_separator: " "
       #     safe_output: false
 
-      - name: Import GPG key
-        uses: crazy-max/ghaction-import-gpg@v6  # v6.1.0
-        with:
-          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
-          passphrase: ${{ secrets.GPG_PASSPHRASE }}
-          git_user_signingkey: true
-          git_commit_gpgsign: true
+#      - name: Import GPG key
+#        uses: crazy-max/ghaction-import-gpg@v6  # v6.1.0
+#        with:
+#          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+#          passphrase: ${{ secrets.GPG_PASSPHRASE }}
+#          git_user_signingkey: true
+#          git_commit_gpgsign: true
 
       #   # This step is going to commit, but this will not trigger another workflow.
       # - name: Bump extensions that uses a modified lib
@@ -87,10 +86,10 @@ jobs:
     strategy:
       matrix: ${{ fromJSON(needs.prepare.outputs.individualMatrix) }}
     steps:
-      - name: Checkout main branch
+      - name: Checkout release branch
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
         with:
-          ref: main
+          ref: release
 
       - name: Set up JDK
         uses: actions/setup-java@387ac29b308b003ca37ba93a6cab5eb57c8f5f93 # v4
@@ -115,7 +114,7 @@ jobs:
 
       - name: Upload APKs (chunk ${{ matrix.chunk }})
         uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4
-        if: "github.repository == 'Kohi-den/extensions-source'"
+        if: "github.repository == 'AlphaBoom/extensions-source-video'"
         with:
           name: "individual-apks-${{ matrix.chunk }}"
           path: "**/*.apk"
@@ -128,7 +127,7 @@ jobs:
     name: Publish repo
     needs:
       - build_individual
-    if: "github.repository == 'Kohi-den/extensions-source'"
+    if: "github.repository == 'AlphaBoom/extensions-source-video'"
     runs-on: ubuntu-latest
     steps:
       - name: Download APK artifacts
@@ -142,10 +141,10 @@ jobs:
           java-version: 17
           distribution: temurin
 
-      - name: Checkout main branch
+      - name: Checkout release branch
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
         with:
-          ref: main
+          ref: release
           path: main
 
       - name: Create repo artifacts
@@ -160,9 +159,7 @@ jobs:
       - name: Checkout repo branch
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
         with:
-          repository: Kohi-den/extensions
-          token: ${{ secrets.BOT_PAT }}
-          ref: main
+          ref: repo
           path: repo
 
       - name: Sync repo
@@ -174,5 +171,5 @@ jobs:
         with:
           message: "Update extensions repo"
           cwd: "./repo"
-          committer_name: Kohi-den-Bot
-          committer_email: 177773202+Kohi-den-Bot@users.noreply.github.com
+          committer_name: github-actions[bot]
+          committer_email: 41898282+github-actions[bot]@users.noreply.github.com
