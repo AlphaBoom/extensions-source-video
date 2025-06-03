@@ -53,7 +53,7 @@ enum class FilterUpdateState {
 
 class Xfani : AnimeHttpSource(), ConfigurableAnimeSource {
     override val baseUrl: String
-        get() = "https://dick.xfani.com"
+        get() = "https://dm.xifanacg.com"
     override val lang: String
         get() = "zh"
     override val name: String
