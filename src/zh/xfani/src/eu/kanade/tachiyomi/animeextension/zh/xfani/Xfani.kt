@@ -20,8 +20,9 @@ import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.coroutines.CoroutineExceptionHandler
-import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -259,12 +260,13 @@ class Xfani : AnimeHttpSource(), ConfigurableAnimeSource {
         return numbers.size == 2 && numbers[0] != numbers[1]
     }
 
+    @OptIn(DelicateCoroutinesApi::class)
     private fun updateFilter() {
         filterState = FilterUpdateState.UPDATING
         val handler = CoroutineExceptionHandler { _, _ ->
             filterState = FilterUpdateState.FAILED
         }
-        CoroutineScope(Dispatchers.IO + handler).launch {
+        GlobalScope.launch(Dispatchers.IO + handler) {
             val jsoup = client.newCall(GET("$baseUrl/show/1/html")).awaitSuccess().asJsoup()
             // update class and year filter type
             val classList = jsoup.select("li[data-type=class]").eachAttr("data-val")
@@ -393,9 +395,5 @@ class Xfani : AnimeHttpSource(), ConfigurableAnimeSource {
         const val PREF_KEY_FILTER_YEAR = "PREF_KEY_FILTER_YEAR"
 
         const val DEFAULT_VIDEO_SOURCE = "0"
-
-        val STATUS_STR_MAPPING = mapOf(
-            "已完结" to SAnime.COMPLETED,
-        )
     }
 }

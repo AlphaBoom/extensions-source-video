@@ -17,8 +17,9 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.coroutines.CoroutineExceptionHandler
-import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
@@ -237,11 +238,12 @@ class Hanime1 : AnimeHttpSource(), ConfigurableAnimeSource {
         return chain.proceed(chain.request())
     }
 
+    @OptIn(DelicateCoroutinesApi::class)
     private fun updateFilters() {
         filterUpdateState = FilterUpdateState.UPDATING
         val exceptionHandler =
             CoroutineExceptionHandler { _, _ -> filterUpdateState = FilterUpdateState.FAILED }
-        CoroutineScope(Dispatchers.IO + exceptionHandler).launch {
+        GlobalScope.launch(Dispatchers.IO + exceptionHandler) {
             val jsoup = client.newCall(GET("$baseUrl/search")).awaitSuccess().asJsoup()
             val genreList = jsoup.select("div.genre-option div.hentai-sort-options").eachText()
             val sortList =
