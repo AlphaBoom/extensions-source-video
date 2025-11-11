@@ -220,14 +220,14 @@ class Xfani : AnimeHttpSource(), ConfigurableAnimeSource {
 
     private fun vodListToAnimePageList(response: Response): AnimesPage {
         val vodResponse = json.decodeFromString<VodResponse>(response.body.string())
-        val animeList = vodResponse.list.map {
+        val animeList = vodResponse.list.map { info ->
             SAnime.create().apply {
-                url = "/bangumi/${it.vodId}.html"
-                thumbnail_url = it.vodPicThumb.ifEmpty { it.vodPic }
-                title = it.vodName
-                author = it.vodActor.replace(",,,", "")
-                description = it.vodBlurb
-                genre = it.vodClass.replace(",", ", ")
+                url = "/bangumi/${info.vodId}.html"
+                thumbnail_url = info.vodPicThumb.takeIf { it.startsWith("http", ignoreCase = true) }
+                    ?: info.vodPic
+                title = info.vodName
+                author = info.vodActor.replace(",,,", "")
+                description = info.vodBlurb
             }
         }
         return AnimesPage(
@@ -335,11 +335,11 @@ class Xfani : AnimeHttpSource(), ConfigurableAnimeSource {
         if (query.isNotBlank()) {
             return doSearch(page, query)
         }
-        val url = baseUrl.toHttpUrl().newBuilder().addPathSegments("index.php/api/vod").build()
-        val time = System.currentTimeMillis() / 1000
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegments("index.php/ds_api/vod").build()
         val formBody =
-            MultipartBody.Builder().setType(MultipartBody.FORM).addFormDataPart("page", "$page")
-                .addFormDataPart("time", "$time").addFormDataPart("key", generateKey(time))
+            MultipartBody.Builder().setType(MultipartBody.FORM)
+                .addFormDataPart("page", "$page")
+                .addFormDataPart("level", "0")
         filters.forEach { filter ->
             when (filter) {
                 is TypeFilter -> formBody.addFormDataPart("type", filter.selected)
