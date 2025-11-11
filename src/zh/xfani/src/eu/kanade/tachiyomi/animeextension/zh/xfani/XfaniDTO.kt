@@ -7,8 +7,6 @@ import kotlinx.serialization.Serializable
 data class VodInfo(
     @SerialName("vod_id")
     val vodId: Int,
-    @SerialName("vod_level")
-    val vodLevel: Int = 0,
     @SerialName("vod_name")
     val vodName: String,
     @SerialName("vod_pic")
@@ -17,14 +15,10 @@ data class VodInfo(
     val vodPicThumb: String = "",
     @SerialName("vod_tag")
     val vodTag: String = "",
-    @SerialName("vod_class")
-    val vodClass: String,
     @SerialName("vod_remarks")
     val vodRemarks: String,
     @SerialName("vod_serial")
     val vodSerial: String,
-    @SerialName("vod_sub")
-    val vodSub: String,
     @SerialName("vod_actor")
     val vodActor: String,
     @SerialName("vod_blurb")
