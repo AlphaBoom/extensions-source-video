@@ -98,10 +98,10 @@ class Hanime1 : AnimeHttpSource(), ConfigurableAnimeSource {
         val nodes = jsoup.select("#playlist-scroll").first()!!.select(">div")
         return nodes.mapIndexed { index, element ->
             SEpisode.create().apply {
-                val href = element.select("a.overlay").attr("href")
+                val href = element.select(".video-title a").attr("href")
                 setUrlWithoutDomain(href)
                 episode_number = (nodes.size - index).toFloat()
-                name = element.select("div.card-mobile-title").text()
+                name = element.select(".video-title").text()
                 if (href == response.request.url.toString()) {
                     // current video
                     val timeStr =
