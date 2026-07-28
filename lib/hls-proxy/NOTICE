@@ -1,0 +1,10 @@
+This module's HLS proxy design and optional fake-image junk-byte detection are
+derived in part from yuzono/anime-extensions lib/m3u8server, licensed under the
+Apache License 2.0:
+
+https://github.com/yuzono/anime-extensions/tree/master/lib/m3u8server
+
+The HTTP server dependency is NanoHTTPD, licensed under the BSD 3-Clause
+License:
+
+https://github.com/NanoHttpd/nanohttpd
