@@ -1,5 +1,46 @@
 [
   {
+    "name": "Aniyomi: RouVideo",
+    "pkg": "eu.kanade.tachiyomi.animeextension.all.rouvideo",
+    "apk": "aniyomi-all.rouvideo-v14.14.apk",
+    "lang": "all",
+    "code": 14,
+    "version": "14.14",
+    "nsfw": 1,
+    "hasReadme": 0,
+    "hasChangelog": 0,
+    "sources": [
+      {
+        "name": "肉視頻",
+        "lang": "all",
+        "id": "7323052797979930552",
+        "baseUrl": "https://rou.video/home",
+        "versionId": 1
+      },
+      {
+        "name": "肉視頻",
+        "lang": "zh",
+        "id": "6055459097979921364",
+        "baseUrl": "https://rou.video/home",
+        "versionId": 1
+      },
+      {
+        "name": "肉視頻",
+        "lang": "en",
+        "id": "1757861758959207324",
+        "baseUrl": "https://rou.video/home",
+        "versionId": 1
+      },
+      {
+        "name": "肉視頻",
+        "lang": "vi",
+        "id": "8210438569455151012",
+        "baseUrl": "https://rou.video/home",
+        "versionId": 1
+      }
+    ]
+  },
+  {
     "name": "Aniyomi: Anime1.me",
     "pkg": "eu.kanade.tachiyomi.animeextension.zh.anime1",
     "apk": "aniyomi-zh.anime1-v14.3.apk",
