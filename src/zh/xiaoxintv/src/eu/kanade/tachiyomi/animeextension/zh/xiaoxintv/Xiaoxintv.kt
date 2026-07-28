@@ -27,7 +27,7 @@ private object HotSortFilter :
 
 class Xiaoxintv : AnimeHttpSource() {
     override val baseUrl: String
-        get() = "https://xiaoxintv.cc"
+        get() = "https://xiaoheimi.cc"
     override val lang: String
         get() = "zh"
     override val name: String
@@ -53,7 +53,7 @@ class Xiaoxintv : AnimeHttpSource() {
         val document = response.asJsoup()
         return SAnime.create().apply {
             thumbnail_url =
-                document.select(".myui-vodlist__thumb.picture img").attr("data-original")
+                document.select(".myui-vodlist__thumb.picture img").attr("abs:data-original")
             url = document.select(".myui-vodlist__thumb.picture").attr("href")
             title = document.select(".myui-content__detail .title").text()
             author = document.selectFirst("p.data:contains(主演：)")?.text()
@@ -125,7 +125,7 @@ class Xiaoxintv : AnimeHttpSource() {
             SAnime.create().apply {
                 val thumbNode = it.select(".myui-vodlist__thumb")
                 url = thumbNode.attr("href")
-                thumbnail_url = thumbNode.attr("data-original")
+                thumbnail_url = thumbNode.attr("abs:data-original")
                 title = thumbNode.attr("title")
             }
         }
@@ -207,7 +207,7 @@ class Xiaoxintv : AnimeHttpSource() {
             SAnime.create().apply {
                 val thumbNode = it.select("a.myui-vodlist__thumb")
                 url = thumbNode.attr("href")
-                thumbnail_url = thumbNode.attr("data-original")
+                thumbnail_url = thumbNode.attr("abs:data-original")
                 title = thumbNode.attr("title")
             }
         }
