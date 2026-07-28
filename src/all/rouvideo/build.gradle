@@ -1,7 +1,7 @@
 ext {
     extName = 'RouVideo'
     extClass = '.RouVideoFactory'
-    extVersionCode = 6
+    extVersionCode = 14
     isNsfw = true
 }
 
@@ -10,4 +10,5 @@ apply from: "$rootDir/common.gradle"
 dependencies {
     implementation(project(":lib:playlist-utils"))
     implementation(project(":lib:i18n"))
+    implementation(project(":lib:hls-proxy"))
 }

@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.animeextension.all.rouvideo
 
 import android.app.Application
 import android.content.SharedPreferences
+import android.util.Base64
 import eu.kanade.tachiyomi.animeextension.all.rouvideo.RouVideoDto.toAnimePage
 import eu.kanade.tachiyomi.animeextension.all.rouvideo.RouVideoFilter.ALL_VIDEOS
 import eu.kanade.tachiyomi.animeextension.all.rouvideo.RouVideoFilter.FEATURED
@@ -16,14 +17,12 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
+import eu.kanade.tachiyomi.lib.hlsproxy.HlsProxy
 import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.lib.playlistutils.PlaylistUtils
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -82,6 +81,7 @@ class RouVideo(
     }
 
     private val playlistUtils by lazy { PlaylistUtils(client) }
+    private val hlsProxy by lazy { HlsProxy(client) }
 
     // ============================== Popular ===============================
 
@@ -106,37 +106,6 @@ class RouVideo(
 
         return json.decodeFromString<RouVideoDto.VideoList>(data)
             .props.pageProps.toAnimePage()
-    }
-
-    override suspend fun fetchRelatedAnimeList(anime: SAnime): List<SAnime> = coroutineScope {
-        listOf(
-            async {
-                client.newCall(relatedAnimeListRequest(anime))
-                    .execute()
-                    .let { response ->
-                        relatedAnimeListParse(response)
-                    }
-            },
-            async {
-                runCatching {
-                    handleSearchAnime(watchingURL, apiHeaders) {
-                        json.decodeFromString<List<RouVideoDto.Video>>(body.string()).toAnimePage()
-                    }
-                }
-                    .getOrNull()
-                    ?.animes ?: emptyList()
-            },
-        ).awaitAll()
-            .flatten()
-    }
-
-    override fun relatedAnimeListParse(response: Response): List<SAnime> {
-        val document = response.asJsoup()
-        val data = document.selectFirst("script#__NEXT_DATA__")?.data()
-            ?: return emptyList()
-
-        return json.decodeFromString<RouVideoDto.VideoDetails>(data)
-            .props.pageProps.relatedVideos.map { video -> video.toSAnime() }
     }
 
     // =============================== Latest ===============================
@@ -455,15 +424,35 @@ class RouVideo(
 
     // ============================ Video Links =============================
 
-    override fun videoListRequest(episode: SEpisode) = GET("$apiUrl/$VIDEO_SLUG/${episode.url}", apiHeaders)
+    override fun videoListRequest(episode: SEpisode) = GET(getEpisodeUrl(episode), docHeaders)
 
     override fun videoListParse(response: Response): List<Video> {
-        val jsonStr = response.body.string()
-        val data = json.decodeFromString<RouVideoDto.VideoData>(jsonStr).video
+        val pageData = response.asJsoup()
+            .selectFirst("script#__NEXT_DATA__")
+            ?.data()
+            ?: throw Exception("Video data not found")
+        val encodedData = json.decodeFromString<RouVideoDto.VideoDetails>(pageData)
+            .props.pageProps.ev
+            ?: throw Exception("Encoded video data not found")
+        val decodedData = Base64.decode(encodedData.d, Base64.DEFAULT)
+            .map { byte -> ((byte.toInt() and 0xff) - encodedData.k).toByte() }
+            .toByteArray()
+            .toString(Charsets.UTF_8)
+        val data = json.decodeFromString<RouVideoDto.VideoData>(decodedData)
 
-        return playlistUtils.extractFromHls(
-            playlistUrl = data.videoUrl,
+        val playbackHeaders = playlistUtils.generateMasterHeaders(
+            baseHeaders = headers,
             referer = "$videoUrl/",
+        )
+        val localPlaylistUrl = hlsProxy.proxy(data.videoUrl, playbackHeaders)
+
+        return listOf(
+            Video(
+                url = data.videoUrl,
+                quality = "Video",
+                videoUrl = localPlaylistUrl,
+                headers = playbackHeaders,
+            ),
         )
     }
 
