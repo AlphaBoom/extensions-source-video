@@ -143,10 +143,10 @@
   {
     "name": "Aniyomi: Xiaoxintv",
     "pkg": "eu.kanade.tachiyomi.animeextension.zh.xiaoxintv",
-    "apk": "aniyomi-zh.xiaoxintv-v14.1.apk",
+    "apk": "aniyomi-zh.xiaoxintv-v14.2.apk",
     "lang": "zh",
-    "code": 1,
-    "version": "14.1",
+    "code": 2,
+    "version": "14.2",
     "nsfw": 0,
     "hasReadme": 0,
     "hasChangelog": 0,
@@ -155,7 +155,7 @@
         "name": "小宝影院",
         "lang": "zh",
         "id": "7859804793032054884",
-        "baseUrl": "https://xiaoxintv.cc",
+        "baseUrl": "https://xiaoheimi.cc",
         "versionId": 1
       }
     ]
