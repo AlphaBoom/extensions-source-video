@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
+import eu.kanade.tachiyomi.lib.hlsproxy.HlsProxy
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.lib.playlistutils.PlaylistUtils
@@ -79,6 +80,7 @@ class RouVideo(
     }
 
     private val playlistUtils by lazy { PlaylistUtils(client) }
+    private val hlsProxy by lazy { HlsProxy(client) }
 
     // ============================== Popular ===============================
 
@@ -427,9 +429,19 @@ class RouVideo(
         val jsonStr = response.body.string()
         val data = json.decodeFromString<RouVideoDto.VideoData>(jsonStr).video
 
-        return playlistUtils.extractFromHls(
-            playlistUrl = data.videoUrl,
+        val playbackHeaders = playlistUtils.generateMasterHeaders(
+            baseHeaders = headers,
             referer = "$videoUrl/",
+        )
+        val localPlaylistUrl = hlsProxy.proxy(data.videoUrl, playbackHeaders)
+
+        return listOf(
+            Video(
+                url = data.videoUrl,
+                quality = "Video",
+                videoUrl = localPlaylistUrl,
+                headers = playbackHeaders,
+            ),
         )
     }
 
