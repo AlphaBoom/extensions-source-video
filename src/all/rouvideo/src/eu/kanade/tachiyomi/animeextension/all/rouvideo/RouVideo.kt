@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.animeextension.all.rouvideo
 
 import android.app.Application
 import android.content.SharedPreferences
-import android.util.Base64
 import eu.kanade.tachiyomi.animeextension.all.rouvideo.RouVideoDto.toAnimePage
 import eu.kanade.tachiyomi.animeextension.all.rouvideo.RouVideoFilter.ALL_VIDEOS
 import eu.kanade.tachiyomi.animeextension.all.rouvideo.RouVideoFilter.FEATURED
@@ -424,21 +423,11 @@ class RouVideo(
 
     // ============================ Video Links =============================
 
-    override fun videoListRequest(episode: SEpisode) = GET(getEpisodeUrl(episode), docHeaders)
+    override fun videoListRequest(episode: SEpisode) = GET("$apiUrl/$VIDEO_SLUG/${episode.url}", apiHeaders)
 
     override fun videoListParse(response: Response): List<Video> {
-        val pageData = response.asJsoup()
-            .selectFirst("script#__NEXT_DATA__")
-            ?.data()
-            ?: throw Exception("Video data not found")
-        val encodedData = json.decodeFromString<RouVideoDto.VideoDetails>(pageData)
-            .props.pageProps.ev
-            ?: throw Exception("Encoded video data not found")
-        val decodedData = Base64.decode(encodedData.d, Base64.DEFAULT)
-            .map { byte -> ((byte.toInt() and 0xff) - encodedData.k).toByte() }
-            .toByteArray()
-            .toString(Charsets.UTF_8)
-        val data = json.decodeFromString<RouVideoDto.VideoData>(decodedData)
+        val jsonStr = response.body.string()
+        val data = json.decodeFromString<RouVideoDto.VideoData>(jsonStr).video
 
         val playbackHeaders = playlistUtils.generateMasterHeaders(
             baseHeaders = headers,

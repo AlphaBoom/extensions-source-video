@@ -135,16 +135,9 @@ internal object RouVideoDto {
             data class PagePropsObject(
                 val video: Video,
                 val relatedVideos: List<Video>,
-                val ev: EncodedVideoData? = null,
             )
         }
     }
-
-    @Serializable
-    data class EncodedVideoData(
-        val d: String,
-        val k: Int,
-    )
 
     @Serializable
     data class Video(
@@ -246,9 +239,14 @@ internal object RouVideoDto {
 
     @Serializable
     data class VideoData(
-        val thumbVTTUrl: String,
-        val videoUrl: String,
-    )
+        val video: VideoObject,
+    ) {
+        @Serializable
+        data class VideoObject(
+            val thumbVTTUrl: String,
+            val videoUrl: String,
+        )
+    }
 
     /* Not available in details */
     @Serializable
