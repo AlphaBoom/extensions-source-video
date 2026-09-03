@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.animeextension.all.rouvideo
 
 import android.app.Application
 import android.content.SharedPreferences
+import android.util.Base64
 import eu.kanade.tachiyomi.animeextension.all.rouvideo.RouVideoDto.toAnimePage
 import eu.kanade.tachiyomi.animeextension.all.rouvideo.RouVideoFilter.ALL_VIDEOS
 import eu.kanade.tachiyomi.animeextension.all.rouvideo.RouVideoFilter.FEATURED
@@ -17,6 +18,7 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import eu.kanade.tachiyomi.lib.hlsproxy.HlsProxy
+import eu.kanade.tachiyomi.lib.hlsproxy.HlsProxyOptions
 import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.lib.playlistutils.PlaylistUtils
 import eu.kanade.tachiyomi.network.GET
@@ -423,21 +425,39 @@ class RouVideo(
 
     // ============================ Video Links =============================
 
-    override fun videoListRequest(episode: SEpisode) = GET("$apiUrl/$VIDEO_SLUG/${episode.url}", apiHeaders)
+    override fun videoListRequest(episode: SEpisode) = GET(getEpisodeUrl(episode), docHeaders)
 
     override fun videoListParse(response: Response): List<Video> {
-        val jsonStr = response.body.string()
-        val data = json.decodeFromString<RouVideoDto.VideoData>(jsonStr).video
+        val pageData = response.asJsoup()
+            .selectFirst("script#__NEXT_DATA__")
+            ?.data()
+            ?: throw Exception("Video data not found")
+        val encodedData = json.decodeFromString<RouVideoDto.VideoDetails>(pageData)
+            .props.pageProps.ev
+            ?: throw Exception("Encoded video data not found")
+        val decodedData = Base64.decode(encodedData.d, Base64.DEFAULT)
+            .map { byte -> ((byte.toInt() and 0xff) - encodedData.k).toByte() }
+            .toByteArray()
+            .toString(Charsets.UTF_8)
+        val data = json.decodeFromString<RouVideoDto.VideoData>(decodedData)
+        val playbackUrl = videoUrl.toHttpUrl().resolve(data.videoUrl)?.toString()
+            ?: throw Exception("Invalid video URL")
 
         val playbackHeaders = playlistUtils.generateMasterHeaders(
             baseHeaders = headers,
             referer = "$videoUrl/",
         )
-        val localPlaylistUrl = hlsProxy.proxy(data.videoUrl, playbackHeaders)
+        val localPlaylistUrl = hlsProxy.proxy(
+            playlistUrl = playbackUrl,
+            headers = playbackHeaders,
+            options = HlsProxyOptions(
+                bodyTransformers = listOf(RouVideoHlsTransformer),
+            ),
+        )
 
         return listOf(
             Video(
-                url = data.videoUrl,
+                url = playbackUrl,
                 quality = "Video",
                 videoUrl = localPlaylistUrl,
                 headers = playbackHeaders,

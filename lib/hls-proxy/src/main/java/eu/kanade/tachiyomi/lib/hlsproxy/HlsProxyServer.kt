@@ -90,7 +90,7 @@ internal class HlsProxyServer(
             headers = proxySession.headers,
         )
         val bodyTransformers = proxySession.options.bodyTransformers
-            .filter { resource.kind != HlsResourceKind.PLAYLIST && it.supports(context) }
+            .filter { it.supports(context) }
         val request = buildUpstreamRequest(
             httpSession = httpSession,
             proxySession = proxySession,
@@ -128,7 +128,13 @@ internal class HlsProxyServer(
 
         return when (resource.kind) {
             HlsResourceKind.PLAYLIST -> {
-                playlistResponse(upstream, proxySession, resource, responseContext)
+                playlistResponse(
+                    upstream = upstream,
+                    proxySession = proxySession,
+                    resource = resource,
+                    context = responseContext,
+                    transformers = bodyTransformers,
+                )
             }
             else -> {
                 resourceResponse(
@@ -187,9 +193,12 @@ internal class HlsProxyServer(
         proxySession: ProxySession,
         resource: ProxyResource,
         context: HlsResourceContext,
+        transformers: List<HlsBodyTransformer>,
     ): Response {
         return upstream.use {
-            var playlist = it.body.string()
+            var playlist = it.body.bytes()
+                .applyTransformers(context, transformers)
+                .toString(Charsets.UTF_8)
             proxySession.options.playlistTransformers.forEach { transformer ->
                 playlist = transformer.transform(context, playlist)
             }
