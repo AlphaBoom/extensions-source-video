@@ -16,7 +16,9 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
+import eu.kanade.tachiyomi.lib.hlsproxy.FakeImageJunkTransformer
 import eu.kanade.tachiyomi.lib.hlsproxy.HlsProxy
+import eu.kanade.tachiyomi.lib.hlsproxy.HlsProxyOptions
 import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.lib.playlistutils.PlaylistUtils
 import eu.kanade.tachiyomi.network.GET
@@ -433,7 +435,14 @@ class RouVideo(
             baseHeaders = headers,
             referer = "$videoUrl/",
         )
-        val localPlaylistUrl = hlsProxy.proxy(data.videoUrl, playbackHeaders)
+        val proxyOptions = HlsProxyOptions(
+            bodyTransformers = listOf(FakeImageJunkTransformer),
+        )
+        val localPlaylistUrl = hlsProxy.proxy(
+            playlistUrl = data.videoUrl,
+            headers = playbackHeaders,
+            options = proxyOptions,
+        )
 
         return listOf(
             Video(
