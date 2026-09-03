@@ -135,7 +135,7 @@ internal object RouVideoDto {
             data class PagePropsObject(
                 val video: Video,
                 val relatedVideos: List<Video>,
-                )
+            )
         }
     }
 
