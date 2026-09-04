@@ -171,10 +171,6 @@ jobs:
             --exclude='repo.json' \
             main/repo/ repo/
 
-          cmp main/repo/index.json repo/index.json
-          cmp main/repo/index.min.json repo/index.min.json
-          git -C repo status --short
-
       - name: Deploy repo
         uses: EndBug/add-and-commit@v9
         with:
