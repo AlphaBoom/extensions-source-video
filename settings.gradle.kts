@@ -19,12 +19,23 @@ if (System.getenv("CI") != "true") {
 } else {
     // Running in CI (GitHub Actions)
 
-    val chunkSize = System.getenv("CI_CHUNK_SIZE").toInt()
-    val chunk = System.getenv("CI_CHUNK_NUM").toInt()
+    val modules = System.getenv("CI_MODULES")
+    if (!modules.isNullOrBlank()) {
+        modules.split(" ").filter { it.isNotBlank() }.forEach { module ->
+            val parts = module.removePrefix(":").split(":")
+            require(parts.size == 3 && parts[0] == "src") {
+                "Invalid extension module: $module"
+            }
+            loadIndividualExtension(parts[1], parts[2])
+        }
+    } else {
+        // Compatibility fallback for workflows that still use fixed-size chunks.
+        val chunkSize = System.getenv("CI_CHUNK_SIZE").toInt()
+        val chunk = System.getenv("CI_CHUNK_NUM").toInt()
 
-    // Loads individual extensions
-    File(rootDir, "src").getChunk(chunk, chunkSize)?.forEach {
-        loadIndividualExtension(it.parentFile.name, it.name)
+        File(rootDir, "src").getChunk(chunk, chunkSize)?.forEach {
+            loadIndividualExtension(it.parentFile.name, it.name)
+        }
     }
 }
 
@@ -59,3 +70,4 @@ fun File.eachDir(block: (File) -> Unit) {
         }
     }
 }
+

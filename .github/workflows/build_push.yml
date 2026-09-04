@@ -11,6 +11,10 @@ on:
       - '.github/scripts/**'
       - '.github/workflows/build_push.yml'
 
+permissions:
+  actions: read
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: true
@@ -22,74 +26,45 @@ jobs:
   prepare:
     name: Prepare job
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
-      individualMatrix: ${{ steps.generate-matrices.outputs.individualMatrix }}
+      matrix: ${{ steps.generate-matrices.outputs.matrix }}
+      delete: ${{ steps.generate-matrices.outputs.delete }}
     steps:
-      - name: Clone repo
+      - name: Checkout release commit
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
         with:
           ref: ${{ github.sha }}
-
-      # Temporary pause because of leak of tj-actions/changed-files
-      # - name: Find lib changes
-      #   id: modified-libs
-      #   uses: tj-actions/changed-files@90a06d6ba9543371ab4df8eeca0be07ca6054959 #v42
-      #   with:
-      #     files: lib/
-      #     files_ignore: lib/**.md
-      #     files_separator: " "
-      #     safe_output: false
-
-#      - name: Import GPG key
-#        uses: crazy-max/ghaction-import-gpg@v6  # v6.1.0
-#        with:
-#          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
-#          passphrase: ${{ secrets.GPG_PASSPHRASE }}
-#          git_user_signingkey: true
-#          git_commit_gpgsign: true
-
-      #   # This step is going to commit, but this will not trigger another workflow.
-      # - name: Bump extensions that uses a modified lib
-      #   if: steps.modified-libs.outputs.any_changed == 'true'
-      #   run: |
-      #     chmod +x ./.github/scripts/bump-versions.py
-      #     ./.github/scripts/bump-versions.py ${{ steps.modified-libs.outputs.all_changed_files }}
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Validate Gradle Wrapper
         uses: gradle/actions/wrapper-validation@v4
 
-      - name: Get number of modules
-        run: |
-          set -x
-          projects=(src/*/*)
-
-          echo "NUM_INDIVIDUAL_MODULES=${#projects[@]}" >> $GITHUB_ENV
+      - name: Get last successful CI commit
+        uses: nrwl/nx-set-shas@afb73a62d26e41464e9254689e1fd6122ee683c1 # v5.0.1
+        with:
+          main-branch-name: release
+          fallback-sha: 4b825dc642cb6eb9a060e54bf8d69288fbee4904 # empty tree
 
       - id: generate-matrices
         name: Create output matrices
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
-        with:
-          script: |
-            const numIndividualModules = process.env.NUM_INDIVIDUAL_MODULES;
-            const chunkSize = process.env.CI_CHUNK_SIZE;
-
-            const numIndividualChunks = Math.ceil(numIndividualModules / chunkSize);
-
-            console.log(`Individual modules: ${numIndividualModules} (${numIndividualChunks} chunks of ${chunkSize})`);
-
-            core.setOutput('individualMatrix', { 'chunk': [...Array(numIndividualChunks).keys()] });
+        run: python ./.github/scripts/generate-build-matrices.py "$NX_BASE"
 
   build_individual:
-    name: Build individual modules
+    name: Build extensions (${{ matrix.chunk.number }})
     needs: prepare
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: ${{ toJson(fromJson(needs.prepare.outputs.matrix).chunk) != '[]' }}
     strategy:
-      matrix: ${{ fromJSON(needs.prepare.outputs.individualMatrix) }}
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
     steps:
-      - name: Checkout release branch
+      - name: Checkout release commit
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
         with:
           ref: ${{ github.sha }}
+          persist-credentials: false
 
       - name: Set up JDK
         uses: actions/setup-java@387ac29b308b003ca37ba93a6cab5eb57c8f5f93 # v4
@@ -104,33 +79,51 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@417ae3ccd767c252f5661f1ace9f835f9654f2b5 # v3
 
-      - name: Build extensions (chunk ${{ matrix.chunk }})
+      - name: Build extensions (${{ matrix.chunk.number }})
         env:
-          CI_CHUNK_NUM: ${{ matrix.chunk }}
+          CI_MODULES: ${{ join(matrix.chunk.modules, ' ') }}
+          MODULES: ${{ join(matrix.chunk.modules, ' ') }}
           ALIAS: ${{ secrets.ALIAS }}
           KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: chmod +x ./gradlew && ./gradlew -p src assembleRelease
+        run: |
+          TASKS=()
+          for module in $MODULES; do
+            TASKS+=("${module}:assembleRelease")
+          done
+          chmod +x ./gradlew
+          ./gradlew "${TASKS[@]}"
 
-      - name: Upload APKs (chunk ${{ matrix.chunk }})
+      - name: Upload APKs (${{ matrix.chunk.number }})
         uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4
         if: "github.repository == 'AlphaBoom/extensions-source-video'"
         with:
-          name: "individual-apks-${{ matrix.chunk }}"
-          path: "**/*.apk"
+          name: "individual-apks-${{ matrix.chunk.number }}"
+          path: "**/build/outputs/apk/release/*.apk"
           retention-days: 1
 
       - name: Clean up CI files
-        run: rm signingkey.jks
+        if: always()
+        run: rm -f signingkey.jks
 
   publish_repo:
     name: Publish repo
-    needs:
-      - build_individual
-    if: "github.repository == 'AlphaBoom/extensions-source-video'"
+    needs: [prepare, build_individual]
+    if: >-
+      always() &&
+      github.repository == 'AlphaBoom/extensions-source-video' &&
+      needs.prepare.result == 'success' &&
+      needs.build_individual.result != 'failure' &&
+      needs.build_individual.result != 'cancelled' &&
+      needs.prepare.outputs.delete != '[]'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: write
     steps:
       - name: Download APK artifacts
+        if: needs.build_individual.result == 'success'
         uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe # v4
         with:
           path: ~/apk-artifacts
@@ -141,20 +134,12 @@ jobs:
           java-version: 17
           distribution: temurin
 
-      - name: Checkout release branch
+      - name: Checkout release commit
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
         with:
           ref: ${{ github.sha }}
           path: main
-
-      - name: Create repo artifacts
-        run: |
-          cd main
-          python ./.github/scripts/move-apks.py
-          INSPECTOR_LINK="$(curl -s "https://api.github.com/repos/aniyomiorg/aniyomi-extensions-inspector/releases/latest" | jq -r '.assets[0].browser_download_url')"
-          curl -L "$INSPECTOR_LINK" -o ./Inspector.jar
-          java -jar ./Inspector.jar "repo/apk" "output.json" "tmp"
-          python ./.github/scripts/create-repo.py
+          persist-credentials: false
 
       - name: Checkout repo branch
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
@@ -162,14 +147,17 @@ jobs:
           ref: repo
           path: repo
 
-      - name: Sync repo
+      - name: Create repo artifacts
+        env:
+          DELETE: ${{ needs.prepare.outputs.delete }}
+          REPO_DIR: ../repo
         run: |
-          rsync -ac --delete \
-            --exclude='.git' \
-            --exclude='.gitignore' \
-            --exclude='README.md' \
-            --exclude='repo.json' \
-            main/repo/ repo/
+          cd main
+          python ./.github/scripts/move-apks.py
+          INSPECTOR_LINK="$(curl -s "https://api.github.com/repos/aniyomiorg/aniyomi-extensions-inspector/releases/latest" | jq -r '.assets[0].browser_download_url')"
+          curl -L "$INSPECTOR_LINK" -o ./Inspector.jar
+          java -jar ./Inspector.jar "$REPO_DIR/apk" "output.json" "tmp"
+          python ./.github/scripts/create-repo.py
 
       - name: Deploy repo
         uses: EndBug/add-and-commit@v9
@@ -178,3 +166,4 @@ jobs:
           cwd: "./repo"
           committer_name: github-actions[bot]
           committer_email: 41898282+github-actions[bot]@users.noreply.github.com
+

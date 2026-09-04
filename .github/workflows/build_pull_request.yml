@@ -8,6 +8,9 @@ on:
       - '!.github/**'
       - '.github/workflows/build_pull_request.yml'
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
   cancel-in-progress: true
@@ -19,45 +22,36 @@ jobs:
   prepare:
     name: Prepare job
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
-      individualMatrix: ${{ steps.generate-matrices.outputs.individualMatrix }}
+      matrix: ${{ steps.generate-matrices.outputs.matrix }}
     steps:
-      - name: Clone repo
+      - name: Checkout PR
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Validate Gradle Wrapper
         uses: gradle/wrapper-validation-action@a494d935f4b56874c4a5a87d19af7afcf3a163d0 # v2
 
-      - name: Get number of modules
-        run: |
-          set -x
-          projects=(src/*/*)
-
-          echo "NUM_INDIVIDUAL_MODULES=${#projects[@]}" >> $GITHUB_ENV
-
       - id: generate-matrices
         name: Create output matrices
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
-        with:
-          script: |
-            const numIndividualModules = process.env.NUM_INDIVIDUAL_MODULES;
-            const chunkSize = process.env.CI_CHUNK_SIZE;
-
-            const numIndividualChunks = Math.ceil(numIndividualModules / chunkSize);
-
-            console.log(`Individual modules: ${numIndividualModules} (${numIndividualChunks} chunks of ${chunkSize})`);
-
-            core.setOutput('individualMatrix', { 'chunk': [...Array(numIndividualChunks).keys()] });
+        run: python ./.github/scripts/generate-build-matrices.py origin/release
 
   build_individual:
-    name: Build individual modules
+    name: Build extensions (${{ matrix.chunk.number }})
     needs: prepare
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: ${{ toJson(fromJson(needs.prepare.outputs.matrix).chunk) != '[]' }}
     strategy:
-      matrix: ${{ fromJSON(needs.prepare.outputs.individualMatrix) }}
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
     steps:
       - name: Checkout PR
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+        with:
+          persist-credentials: false
 
       - name: Set up JDK
         uses: actions/setup-java@387ac29b308b003ca37ba93a6cab5eb57c8f5f93 # v4
@@ -70,7 +64,15 @@ jobs:
         with:
           cache-read-only: true
 
-      - name: Build extensions (chunk ${{ matrix.chunk }})
+      - name: Build extensions (${{ matrix.chunk.number }})
         env:
-          CI_CHUNK_NUM: ${{ matrix.chunk }}
-        run: chmod +x ./gradlew && ./gradlew -p src assembleDebug
+          CI_MODULES: ${{ join(matrix.chunk.modules, ' ') }}
+          MODULES: ${{ join(matrix.chunk.modules, ' ') }}
+        run: |
+          TASKS=()
+          for module in $MODULES; do
+            TASKS+=("${module}:assembleDebug")
+          done
+          chmod +x ./gradlew
+          ./gradlew "${TASKS[@]}"
+
