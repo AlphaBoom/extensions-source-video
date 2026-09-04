@@ -144,10 +144,15 @@ def get_module_list(ref: str) -> tuple[list[str], list[str]]:
             multisrc = match.group("multisrc")
             if Path("lib-multisrc", multisrc).is_dir():
                 multisrcs.add(multisrc)
+            else:
+                # A removed shared module can affect dependencies we can no longer inspect.
+                core_files_changed = True
         elif match := LIB_REGEX.search(file):
             lib = match.group("lib")
             if Path("lib", lib).is_dir():
                 libs.add(lib)
+            else:
+                core_files_changed = True
 
     if core_files_changed:
         all_modules = get_all_modules()
