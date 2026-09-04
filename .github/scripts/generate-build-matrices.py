@@ -11,7 +11,8 @@ MULTISRC_LIB_REGEX = re.compile(r"^lib-multisrc/(?P<multisrc>[^/]+)")
 LIB_REGEX = re.compile(r"^lib/(?P<lib>[^/]+)")
 CORE_FILES_REGEX = re.compile(
     r"^(buildSrc/|core/|gradle/|build\.gradle\.kts|common\.gradle|"
-    r"gradle\.properties|repositories\.gradle\.kts|settings\.gradle\.kts|"
+    r"gradle\.properties|gradlew(?:\.bat)?|repositories\.gradle\.kts|"
+    r"settings\.gradle\.kts|"
     r"\.github/scripts/)"
 )
 
