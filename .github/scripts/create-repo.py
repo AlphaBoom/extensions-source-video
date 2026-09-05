@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 from zipfile import ZipFile
@@ -16,11 +17,13 @@ APPLICATION_ICON_320_REGEX = re.compile(
 LANGUAGE_REGEX = re.compile(r"aniyomi-([^\.]+)")
 
 *_, ANDROID_BUILD_TOOLS = (Path(os.environ["ANDROID_HOME"]) / "build-tools").iterdir()
-REPO_DIR = Path("repo")
+REPO_DIR = Path(os.getenv("REPO_DIR", "repo"))
 REPO_APK_DIR = REPO_DIR / "apk"
 REPO_ICON_DIR = REPO_DIR / "icon"
 
-REPO_ICON_DIR.mkdir(parents=True, exist_ok=True)
+if REPO_ICON_DIR.exists():
+    shutil.rmtree(REPO_ICON_DIR)
+REPO_ICON_DIR.mkdir(parents=True)
 
 with open("output.json", encoding="utf-8") as f:
     inspector_data = json.load(f)
@@ -40,7 +43,7 @@ for apk in REPO_APK_DIR.iterdir():
     ).decode()
 
     package_info = next(x for x in badging.splitlines() if x.startswith("package: "))
-    package_name = PACKAGE_NAME_REGEX.search(package_info).group(1)    
+    package_name = PACKAGE_NAME_REGEX.search(package_info).group(1)
     application_icon = APPLICATION_ICON_320_REGEX.search(badging).group(1)
 
     with ZipFile(apk) as z, z.open(application_icon) as i, (
@@ -106,3 +109,4 @@ with (REPO_DIR / "index.json").open("w", encoding="utf-8") as f:
 
 with (REPO_DIR / "index.min.json").open("w", encoding="utf-8") as f:
     json.dump(index_min_data, f, ensure_ascii=False, separators=(",", ":"))
+
