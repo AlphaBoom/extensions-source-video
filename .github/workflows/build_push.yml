@@ -107,7 +107,7 @@ jobs:
     name: Publish repo
     needs: [prepare, build_individual]
     if: >-
-      always() &&
+      !cancelled() &&
       github.repository == 'AlphaBoom/extensions-source-video' &&
       needs.prepare.result == 'success' &&
       needs.build_individual.result != 'failure' &&
@@ -163,4 +163,3 @@ jobs:
           cwd: "./repo"
           committer_name: github-actions[bot]
           committer_email: 41898282+github-actions[bot]@users.noreply.github.com
-

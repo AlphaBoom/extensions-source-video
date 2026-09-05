@@ -8,6 +8,7 @@ on:
       - '!.github/**'
       - '.github/scripts/**'
       - '.github/workflows/build_pull_request.yml'
+      - '.github/workflows/build_push.yml'
 
 permissions:
   contents: read
@@ -73,4 +74,3 @@ jobs:
           done
           chmod +x ./gradlew
           ./gradlew "${TASKS[@]}"
-

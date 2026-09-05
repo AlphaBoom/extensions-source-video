@@ -10,9 +10,17 @@ REPO_APK_DIR = REPO_DIR / "apk"
 
 REPO_APK_DIR.mkdir(parents=True, exist_ok=True)
 
-# Remove the previously published APK for every rebuilt or deleted module.
-for module in json.loads(os.getenv("DELETE", "[]")):
-    for old_apk in REPO_APK_DIR.glob(f"aniyomi-{module}-v*.apk"):
+# Reconcile with the source tree even when the diff uses the empty-tree fallback.
+current_modules = {
+    f"{extension.parent.name}.{extension.name}"
+    for extension in Path("src").glob("*/*")
+    if any((extension / name).is_file() for name in ("build.gradle", "build.gradle.kts"))
+}
+replaced_or_deleted = set(json.loads(os.getenv("DELETE", "[]")))
+
+for old_apk in REPO_APK_DIR.glob("aniyomi-*-v*.apk"):
+    module = old_apk.name.removeprefix("aniyomi-").rsplit("-v", 1)[0]
+    if module not in current_modules or module in replaced_or_deleted:
         old_apk.unlink()
 
 # Replace changed APKs while keeping every unaffected APK in the repository.
@@ -24,4 +32,3 @@ for apk in ARTIFACTS_DIR.glob("**/*.apk"):
         old_apk.unlink()
 
     shutil.move(apk, REPO_APK_DIR / apk_name)
-

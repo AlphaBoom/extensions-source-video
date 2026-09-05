@@ -13,7 +13,7 @@ CORE_FILES_REGEX = re.compile(
     r"^(buildSrc/|core/|gradle/|build\.gradle\.kts|common\.gradle|"
     r"gradle\.properties|gradlew(?:\.bat)?|repositories\.gradle\.kts|"
     r"settings\.gradle\.kts|"
-    r"\.github/scripts/)"
+    r"\.github/scripts/|\.github/workflows/build_(?:push|pull_request)\.yml$)"
 )
 
 
@@ -200,4 +200,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
