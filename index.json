@@ -63,10 +63,10 @@
   {
     "name": "Aniyomi: Hanime1",
     "pkg": "eu.kanade.tachiyomi.animeextension.zh.hanime1",
-    "apk": "aniyomi-zh.hanime1-v14.10.apk",
+    "apk": "aniyomi-zh.hanime1-v14.11.apk",
     "lang": "zh",
-    "code": 10,
-    "version": "14.10",
+    "code": 11,
+    "version": "14.11",
     "nsfw": 1,
     "hasReadme": 0,
     "hasChangelog": 0,
