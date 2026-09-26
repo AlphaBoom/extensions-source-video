@@ -66,12 +66,13 @@ class Hanime1 : AnimeHttpSource(), ConfigurableAnimeSource {
 
     override fun animeDetailsParse(response: Response): SAnime {
         val doc = response.asJsoup()
+        val caption = doc.selectFirst("div.video-description-panel > .video-caption-text")
         return SAnime.create().apply {
             genre = doc.select(".single-video-tag").not("[data-toggle]").eachText().joinToString()
             author = doc.select("#video-artist-name").text()
-            val realTitle = doc.select("#shareBtn-title").text()
+            val realTitle = caption?.previousElementSibling()?.text().orEmpty()
             title = realTitle.appendInvisibleChar()
-            description = doc.select("div.video-description-panel > div:nth-child(3)").text()
+            description = caption?.text().orEmpty()
             thumbnail_url = doc.select("video[poster]").attr("poster")
             val type = doc.select("a#video-artist-name + a").text().trim()
             if (type == "裏番" || type == "泡麵番") {
@@ -105,7 +106,7 @@ class Hanime1 : AnimeHttpSource(), ConfigurableAnimeSource {
                 if (href == response.request.url.toString()) {
                     // current video
                     val timeStr =
-                        jsoup.select("div.video-description-panel > div:first-child").text()
+                        jsoup.select("div.video-description-panel > div.hidden-xs").text()
                             .split(" ").last()
                     date_upload =
                         runCatching { uploadDateFormat.parse(timeStr)?.time }.getOrNull() ?: 0L
