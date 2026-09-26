@@ -69,7 +69,7 @@ class Hanime1 : AnimeHttpSource(), ConfigurableAnimeSource {
         return SAnime.create().apply {
             genre = doc.select(".single-video-tag").not("[data-toggle]").eachText().joinToString()
             author = doc.select("#video-artist-name").text()
-            val realTitle = doc.select("div.video-description-panel > div:nth-child(2)").text()
+            val realTitle = doc.select("#shareBtn-title").text()
             title = realTitle.appendInvisibleChar()
             description = doc.select("div.video-description-panel > div:nth-child(3)").text()
             thumbnail_url = doc.select("video[poster]").attr("poster")
