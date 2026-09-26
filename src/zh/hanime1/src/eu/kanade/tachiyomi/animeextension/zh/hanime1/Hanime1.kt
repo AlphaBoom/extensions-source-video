@@ -61,18 +61,20 @@ class Hanime1 : AnimeHttpSource(), ConfigurableAnimeSource {
     private val json by injectLazy<Json>()
     private var filterUpdateState = FilterUpdateState.NONE
     private val uploadDateFormat: SimpleDateFormat by lazy {
-        SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
+        SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply { isLenient = false }
     }
 
     override fun animeDetailsParse(response: Response): SAnime {
         val doc = response.asJsoup()
         return SAnime.create().apply {
-            genre = doc.select(".single-video-tag").not("[data-toggle]").eachText().joinToString()
+            genre = doc.select(".single-video-tag").not("[data-toggle]").eachText()
+                .joinToString { it.removePrefix("# ").replace(REGEX_VIDEO_TAG_SUFFIX, "") }
             author = doc.select("#video-artist-name").text()
             val realTitle = doc.select("#shareBtn-title").text()
             title = realTitle.appendInvisibleChar()
-            description = doc.select("div.video-description-panel > div:nth-child(3)").text()
-            thumbnail_url = doc.select("video[poster]").attr("poster")
+            description = doc.select(".video-description-panel .video-caption-text").text()
+            thumbnail_url = doc.select("meta[property=og:image]").attr("content")
+                .ifBlank { doc.select("video[poster]").attr("poster") }
             val type = doc.select("a#video-artist-name + a").text().trim()
             if (type == "裏番" || type == "泡麵番") {
                 // Use the series cover image for bangumi entries instead of the episode image.
@@ -95,28 +97,50 @@ class Hanime1 : AnimeHttpSource(), ConfigurableAnimeSource {
 
     override fun episodeListParse(response: Response): List<SEpisode> {
         val jsoup = response.asJsoup()
-        val nodes = jsoup.select("#playlist-scroll").first()!!.select(">div")
-        return nodes.mapIndexed { index, element ->
+        val currentVideoId = response.request.url.queryParameter("v")
+        val date = REGEX_UPLOAD_DATE
+            .find(jsoup.select(".video-description-panel > .hidden-xs").text())?.value
+        val uploadDate = date?.let {
+            runCatching { uploadDateFormat.parse(it)?.time }.getOrNull()
+        } ?: 0L
+        val episodes = jsoup.select("#playlist-scroll > div").mapNotNull { element ->
+            val url = element.select("a[href]").mapNotNull { link ->
+                response.request.url.resolve(link.attr("href"))
+            }.firstOrNull { url ->
+                url.host == response.request.url.host &&
+                    url.encodedPath == "/watch" &&
+                    !url.queryParameter("v").isNullOrBlank()
+            }
+            url?.let { element to it }
+        }
+        val parsedEpisodes = episodes.mapIndexed { index, (element, url) ->
             SEpisode.create().apply {
-                val href = element.select(".video-title a").attr("href")
-                setUrlWithoutDomain(href)
-                episode_number = (nodes.size - index).toFloat()
+                setUrlWithoutDomain(url.toString())
+                episode_number = (episodes.size - index).toFloat()
                 name = element.select(".video-title").text()
-                if (href == response.request.url.toString()) {
-                    // current video
-                    val timeStr =
-                        jsoup.select("div.video-description-panel > div:first-child").text()
-                            .split(" ").last()
-                    date_upload =
-                        runCatching { uploadDateFormat.parse(timeStr)?.time }.getOrNull() ?: 0L
+                if (url.queryParameter("v") == currentVideoId) {
+                    date_upload = uploadDate
                 }
             }
         }
+        // Standalone videos may have no playlist; keep the current video playable.
+        if (currentVideoId != null && jsoup.selectFirst("#shareBtn-title") != null &&
+            episodes.none { (_, url) -> url.queryParameter("v") == currentVideoId }
+        ) {
+            val currentEpisode = SEpisode.create().apply {
+                setUrlWithoutDomain(response.request.url.toString())
+                episode_number = (episodes.size + 1).toFloat()
+                name = jsoup.select("#shareBtn-title").text()
+                date_upload = uploadDate
+            }
+            return listOf(currentEpisode) + parsedEpisodes
+        }
+        return parsedEpisodes
     }
 
     override fun videoListParse(response: Response): List<Video> {
         val doc = response.asJsoup()
-        val sourceList = doc.select("video source")
+        val sourceList = doc.select("video source[src]").filter { it.attr("src").isNotBlank() }
         val preferQuality = preferences.getString(PREF_KEY_VIDEO_QUALITY, DEFAULT_QUALITY)
         return sourceList.map {
             val quality = it.attr("size")
@@ -125,8 +149,9 @@ class Hanime1 : AnimeHttpSource(), ConfigurableAnimeSource {
         }.sortedByDescending { preferQuality == it.quality }
             .ifEmpty {
                 // Try to find the source from the script content.
-                val videoUrl = doc.select("script:containsData(source)").first()!!.data()
-                    .substringAfter("source = '").substringBefore("'")
+                val videoUrl = doc.select("script:containsData(source)").firstNotNullOfOrNull {
+                    REGEX_SCRIPT_SOURCE.find(it.data())?.groupValues?.get(1)
+                } ?: return emptyList()
                 listOf(Video(videoUrl, "Raw", videoUrl = videoUrl))
             }
     }
@@ -366,5 +391,9 @@ class Hanime1 : AnimeHttpSource(), ConfigurableAnimeSource {
         const val PREF_KEY_CATEGORY_LIST = "PREF_KEY_CATEGORY_LIST"
 
         const val DEFAULT_QUALITY = "1080P"
+
+        private val REGEX_UPLOAD_DATE = Regex("""\d{4}-\d{2}-\d{2}""")
+        private val REGEX_VIDEO_TAG_SUFFIX = Regex(""" \(\d+\)$""")
+        private val REGEX_SCRIPT_SOURCE = Regex("""\bsource\s*=\s*['"]([^'"]+)['"]""")
     }
 }
