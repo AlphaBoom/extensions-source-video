@@ -140,7 +140,8 @@ class Hanime1 : AnimeHttpSource(), ConfigurableAnimeSource {
 
     override fun videoListParse(response: Response): List<Video> {
         val doc = response.asJsoup()
-        val sourceList = doc.select("video source[src]").filter { it.attr("src").isNotBlank() }
+        val sourceList = doc.select("video source[src]").toList()
+            .filter { it.attr("src").isNotBlank() }
         val preferQuality = preferences.getString(PREF_KEY_VIDEO_QUALITY, DEFAULT_QUALITY)
         return sourceList.map {
             val quality = it.attr("size")
