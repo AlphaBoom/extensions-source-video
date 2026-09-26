@@ -69,12 +69,13 @@ class Hanime1 : AnimeHttpSource(), ConfigurableAnimeSource {
         return SAnime.create().apply {
             genre = doc.select(".single-video-tag").not("[data-toggle]").eachText().joinToString()
             author = doc.select("#video-artist-name").text()
-            val realTitle = doc.select("div.video-description-panel > div:nth-child(2)").text()
-            title = realTitle.appendInvisibleChar()
+            val realTitle = doc.select("#shareBtn-title").text().takeIf { it.isNotBlank() }
+                ?: doc.select("meta[property=og:title]").attr("content").takeIf { it.isNotBlank() }
+            title = realTitle?.appendInvisibleChar() ?: ""
             description = doc.select("div.video-description-panel > div:nth-child(3)").text()
             thumbnail_url = doc.select("video[poster]").attr("poster")
             val type = doc.select("a#video-artist-name + a").text().trim()
-            if (type == "裏番" || type == "泡麵番") {
+            if ((type == "裏番" || type == "泡麵番") && realTitle != null) {
                 // Use the series cover image for bangumi entries instead of the episode image.
                 runBlocking {
                     try {
