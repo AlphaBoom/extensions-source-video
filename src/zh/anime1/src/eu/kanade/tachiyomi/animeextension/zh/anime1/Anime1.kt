@@ -51,7 +51,7 @@ class Anime1 : AnimeHttpSource(), ConfigurableAnimeSource {
     override fun headersBuilder() = super.headersBuilder().add("referer", "$baseUrl/")
 
     private val videoApiUrl = "https://v.anime1.me/api"
-    private val dataUrl = "https://d1zquzjgwo9yb.cloudfront.net"
+    private val dataUrl = "$baseUrl/animelist.json"
     private val uploadDateFormat: SimpleDateFormat by lazy {
         SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.getDefault())
     }
@@ -123,10 +123,12 @@ class Anime1 : AnimeHttpSource(), ConfigurableAnimeSource {
 
     override suspend fun getLatestUpdates(page: Int): AnimesPage {
         if (!this::data.isInitialized) {
-            data = client.newCall(GET("$dataUrl/?_=${System.currentTimeMillis()}")).awaitSuccess()
+            data = client.newCall(GET(dataUrl, headers)).awaitSuccess()
                 .parseAs()
         }
-        val items = data.subList((page - 1) * PAGE_SIZE, (page * PAGE_SIZE).coerceAtMost(data.size))
+        val startIndex = ((page - 1) * PAGE_SIZE).coerceIn(0, data.size)
+        val endIndex = (startIndex + PAGE_SIZE).coerceAtMost(data.size)
+        val items = data.subList(startIndex, endIndex)
         return AnimesPage(
             items.map {
                 SAnime.create().apply {
@@ -154,7 +156,7 @@ class Anime1 : AnimeHttpSource(), ConfigurableAnimeSource {
                     thumbnail_url = FIX_COVER
                 }
             },
-            items.size == PAGE_SIZE,
+            endIndex < data.size,
         )
     }
 
