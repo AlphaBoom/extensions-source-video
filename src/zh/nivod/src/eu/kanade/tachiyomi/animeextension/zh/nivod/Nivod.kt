@@ -152,15 +152,13 @@ class Nivod : AnimeHttpSource() {
         if (query.isNotEmpty()) {
             return keywordSearch(page, query)
         }
-        val filterUrl = baseUrl.toHttpUrl().newBuilder().addPathSegment("filter.html")
-        filters.list
-            .flatMap {
-                when (it) {
-                    is AnimeFilter.Group<*> -> it.state
-                    else -> listOf(it)
-                }
-            }
-            .filterIsInstance<QueryFilter>()
+        val channel = filters.filterIsInstance<ChannelFilter>().firstOrNull()?.selected ?: "anime"
+        val filterUrl = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("filter.html")
+            .addQueryParameter("channel", channel)
+        filters.filterIsInstance<ChannelFilterGroup>()
+            .firstOrNull { it.channel == channel }
+            ?.state.orEmpty()
             .forEach {
                 if (it.selected.isNotEmpty()) {
                     filterUrl.addQueryParameter(it.key, it.selected)
@@ -172,19 +170,20 @@ class Nivod : AnimeHttpSource() {
     override fun getFilterList(): AnimeFilterList {
         return AnimeFilterList(
             ChannelFilter(),
-            AnimeFilter.Header("详细筛选设置"),
-            generateGroupFilter(PREF_KEY_ANIME_FILTER, "动漫"),
-            generateGroupFilter(PREF_KEY_MOVIE_FILTER, "电影"),
-            generateGroupFilter(PREF_KEY_TV_FILTER, "电视剧"),
-            generateGroupFilter(PREF_KEY_SHOW_FILTER, "综艺"),
+            AnimeFilter.Header("仅当前分类对应分组的筛选条件生效"),
+            generateGroupFilter(PREF_KEY_ANIME_FILTER, "anime", "动漫"),
+            generateGroupFilter(PREF_KEY_MOVIE_FILTER, "movie", "电影"),
+            generateGroupFilter(PREF_KEY_TV_FILTER, "tv", "电视剧"),
+            generateGroupFilter(PREF_KEY_SHOW_FILTER, "show", "综艺"),
         )
     }
 
     private fun generateGroupFilter(
         key: String,
+        channel: String,
         name: String,
-    ): AnimeFilter.Group<QueryFilter> {
-        return object : AnimeFilter.Group<QueryFilter>(name, generateFilters(key)) {}
+    ): ChannelFilterGroup {
+        return ChannelFilterGroup(channel, name, generateFilters(key))
     }
 
     private fun generateFilters(key: String): List<QueryFilter> {
@@ -293,9 +292,10 @@ class Nivod : AnimeHttpSource() {
         val result = mutableMapOf<String, String>()
         result["全部年份"] = ""
         repeat(10) {
-            result["${year--}"] = "$year"
+            result["$year"] = "$year"
+            year--
         }
-        result["更早"] = "lt__$year"
+        result["更早"] = "lt__${year + 1}"
         return result
     }
 
