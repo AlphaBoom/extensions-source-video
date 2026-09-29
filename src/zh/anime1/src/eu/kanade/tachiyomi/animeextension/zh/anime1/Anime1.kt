@@ -122,7 +122,7 @@ class Anime1 : AnimeHttpSource(), ConfigurableAnimeSource {
     }
 
     override suspend fun getLatestUpdates(page: Int): AnimesPage {
-        if (page == 1 || !this::data.isInitialized) {
+        if (!this::data.isInitialized) {
             data = client.newCall(GET(dataUrl, headers)).awaitSuccess()
                 .parseAs()
         }
