@@ -24,6 +24,12 @@ class ChannelFilter : QueryFilter(
     "channel",
 )
 
+class ChannelFilterGroup(
+    val channel: String,
+    name: String,
+    filters: List<QueryFilter>,
+) : AnimeFilter.Group<QueryFilter>(name, filters)
+
 class YearFilter(options: List<Pair<String, String>>) : QueryFilter("年份", options, "year")
 
 class TypeFilter(options: List<Pair<String, String>>) : QueryFilter("类型", options, "showtype")
