@@ -241,6 +241,9 @@ class Xfani : AnimeHttpSource(), ConfigurableAnimeSource {
             return vodListToAnimePageList(response)
         }
         val jsoup = response.asJsoup()
+        if (jsoup.selectFirst(".verify-submit[data-type=search]") != null) {
+            throw Exception("搜索需要验证码，请在 WebView 中搜索并完成验证后重试。")
+        }
         val items = jsoup.select("div.search-list")
         val animeList = items.map { item ->
             SAnime.create().apply {
