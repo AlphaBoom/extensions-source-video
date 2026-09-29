@@ -34,6 +34,9 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Test CI release guards
+        run: python -m unittest discover -s .github/scripts/tests -p 'test_*.py'
+
       - id: generate-matrices
         name: Create output matrices
         run: python ./.github/scripts/generate-build-matrices.py origin/release
