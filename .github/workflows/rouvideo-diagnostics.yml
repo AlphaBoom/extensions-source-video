@@ -1,0 +1,54 @@
+name: RouVideo response diagnostics
+
+on:
+  push:
+    branches: [codex/rouvideo-diagnostics]
+    paths:
+      - '.github/workflows/rouvideo-diagnostics.yml'
+      - '.github/scripts/fetch-rouvideo.py'
+
+permissions:
+  contents: read
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Fetch source responses
+        env:
+          ROUVIDEO_PROXY_CONFIG: ${{ secrets.ROUVIDEO_PROXY_CONFIG }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          proxy_dir="$(mktemp -d)"
+          cleanup() {
+            if [[ -f "$proxy_dir/pid" ]]; then
+              kill "$(cat "$proxy_dir/pid")" 2>/dev/null || true
+            fi
+            rm -rf "$proxy_dir"
+          }
+          trap cleanup EXIT
+          if [[ -n "$ROUVIDEO_PROXY_CONFIG" ]]; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq --no-install-recommends shadowsocks-libev
+            python .github/scripts/fetch-rouvideo.py --proxy-config "$proxy_dir/config.json"
+            ss-local -c "$proxy_dir/config.json" -b 127.0.0.1 -l 1080 -f "$proxy_dir/pid" >"$proxy_dir/client.log" 2>&1
+            export ROUVIDEO_SOCKS_PROXY=127.0.0.1:1080
+          fi
+          unset ROUVIDEO_PROXY_CONFIG
+          python .github/scripts/fetch-rouvideo.py --output rouvideo-responses
+
+      - name: Upload original responses
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: rouvideo-responses
+          path: rouvideo-responses/
+          retention-days: 1
+          if-no-files-found: error
