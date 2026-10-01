@@ -15,10 +15,6 @@ permissions:
   actions: read
   contents: read
 
-concurrency:
-  group: ${{ github.workflow }}
-  cancel-in-progress: true
-
 env:
   CI_CHUNK_SIZE: 65
 
@@ -27,6 +23,9 @@ jobs:
     name: Prepare job
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      actions: write
+      contents: read
     outputs:
       matrix: ${{ steps.generate-matrices.outputs.matrix }}
       delete: ${{ steps.generate-matrices.outputs.delete }}
@@ -37,6 +36,12 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
+
+      # Cancel old runs asynchronously so their shutdown does not block this build.
+      - name: Cancel superseded release runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python ./.github/scripts/guard-release-run.py --cancel-older
 
       - name: Get last successful CI commit
         uses: nrwl/nx-set-shas@afb73a62d26e41464e9254689e1fd6122ee683c1 # v5.0.1
@@ -89,7 +94,7 @@ jobs:
             TASKS+=("${module}:assembleRelease")
           done
           chmod +x ./gradlew
-          ./gradlew "${TASKS[@]}"
+          exec ./gradlew "${TASKS[@]}"
 
       - name: Upload APKs (${{ matrix.chunk.number }})
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -105,6 +110,10 @@ jobs:
 
   publish_repo:
     name: Publish repo
+    # Only publication is serialized; new builds can start while old runs exit.
+    concurrency:
+      group: release-repo-publish
+      cancel-in-progress: false
     needs: [prepare, build_individual]
     if: >-
       !cancelled() &&
@@ -119,6 +128,18 @@ jobs:
       actions: read
       contents: write
     steps:
+      - name: Checkout release commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: main
+          persist-credentials: false
+
+      - name: Reject superseded release publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python ./main/.github/scripts/guard-release-run.py
+
       - name: Download APK artifacts
         if: needs.build_individual.result == 'success'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -130,13 +151,6 @@ jobs:
         with:
           java-version: 17
           distribution: temurin
-
-      - name: Checkout release commit
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.sha }}
-          path: main
-          persist-credentials: false
 
       - name: Checkout repo branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -155,6 +169,11 @@ jobs:
           curl -L "$INSPECTOR_LINK" -o ./Inspector.jar
           java -jar ./Inspector.jar "$REPO_DIR/apk" "output.json" "tmp"
           python ./.github/scripts/create-repo.py
+
+      - name: Recheck release before deploying
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python ./main/.github/scripts/guard-release-run.py
 
       - name: Deploy repo
         uses: EndBug/add-and-commit@v9
