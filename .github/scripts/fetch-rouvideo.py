@@ -1,6 +1,9 @@
 """Collect source-owned RouVideo responses without logging page content or credentials."""
 
 import argparse
+import base64
+import struct
+import zlib
 import concurrent.futures
 import hashlib
 import html
@@ -107,6 +110,62 @@ def fetch(label, url, output):
     return metadata, text
 
 
+
+def hydrate(label, output):
+    code = r"""
+        const fs = require('fs'), vm = require('vm');
+        const page = fs.readFileSync(0, 'utf8');
+        const scripts = [...page.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].map(m => m[1]);
+        const script = scripts.find(s => s.includes('$_TSR.router='));
+        if (!script) process.exit(2);
+        let source = script.slice(script.indexOf('$_TSR.router='));
+        const end = source.indexOf(';$_TSR.e()');
+        if (end >= 0) source = source.slice(0, end);
+        const context = {$R: {tsr: []}, $_TSR: {}};
+        try { vm.runInNewContext(source, context, {timeout: 1000}); }
+        catch (error) { process.stderr.write(error.name); process.exit(3); }
+        process.stdout.write(JSON.stringify(context.$_TSR.router.matches.at(-1).l));
+    """
+    result = subprocess.run(['node', '-e', code], input=(output / (label + '.body')).read_text(), capture_output=True, text=True, timeout=10)
+    if result.returncode:
+        raise ValueError('Could not inspect source hydration for ' + label)
+    loader = json.loads(result.stdout)
+    (output / (label + '.loader.json')).write_text(json.dumps(loader, ensure_ascii=False, indent=2))
+    return loader
+
+
+def unwrap(body):
+    if not body.startswith(bytes.fromhex('89504e470d0a1a0a')):
+        return body
+    offset = 8
+    while offset + 12 <= len(body):
+        length = struct.unpack_from('>I', body, offset)[0]
+        payload = body[offset+8:offset+8+length]
+        if body[offset+4:offset+8] == b'roUd':
+            return zlib.decompress(payload[1:]) if payload[0] & 1 else payload[1:]
+        offset += length + 12
+    raise ValueError('PNG response has no roUd chunk')
+
+
+def playback_probe(loader, label, output):
+    ev = loader['ev']
+    decoded = json.loads(bytes((byte-ev['k']) % 256 for byte in base64.b64decode(ev['d'])))
+    url = urllib.parse.urljoin(BASE, decoded['videoUrl'])
+    for depth in range(4):
+        item = label + '-hls-' + str(depth)
+        info, _ = fetch(item, url, output)
+        body = unwrap((output / (item + '.body')).read_bytes())
+        (output / (item + '.decoded')).write_bytes(body)
+        if body.startswith(b'#EXTM3U'):
+            playlist = body.decode()
+            next_uri = next(line.strip() for line in playlist.splitlines() if line.strip() and not line.startswith('#'))
+            url = urllib.parse.urljoin(info['effective_url'], next_uri)
+        else:
+            print('playback_probe=' + label + '; segment_bytes=' + str(len(body)) + '; ts_sync=' + str(body[:1] == b'\x47'))
+            return
+    raise ValueError('Playlist probe exceeded depth limit')
+
+
 def collect(output):
     output.mkdir(parents=True, exist_ok=True)
     print("transport=" + ("shadowsocks" if os.environ.get("ROUVIDEO_SOCKS_PROXY") else "direct"))
@@ -135,6 +194,17 @@ def collect(output):
     if tag:
         info, _ = fetch("tag", tag, output)
         metadata.append(info)
+    loaders = {label: hydrate(label, output) for label, _ in pages if label != 'watching-api'}
+    if details:
+        loaders['detail'] = hydrate('detail', output)
+    if tag:
+        loaders['tag'] = hydrate('tag', output)
+    ordinary = next(video for video in loaders['latest-page-1']['videos'] if video.get('seriesId') is None)
+    info, _ = fetch('ordinary-detail', BASE + '/v/' + ordinary['id'], output)
+    metadata.append(info)
+    loaders['ordinary-detail'] = hydrate('ordinary-detail', output)
+    playback_probe(loaders['detail'], 'detail', output)
+    playback_probe(loaders['ordinary-detail'], 'ordinary', output)
     scripts = re.findall(r'<script\b[^>]*\bsrc=["\']([^"\']+)', page_text)
     assets = sorted({urllib.parse.urljoin(BASE, html.unescape(src)) for src in scripts})
     assets = [url for url in assets if urllib.parse.urlparse(url).netloc == "rou.video"][:30]
