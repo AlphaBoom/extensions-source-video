@@ -15,104 +15,49 @@ import kotlin.time.Duration.Companion.seconds
 internal object RouVideoDto {
     @Serializable
     data class VideoList(
-        val props: PropsObject,
+        val videos: List<Video>,
+        val pageNum: Int,
+        val totalPage: Int,
+        val hotSearches: List<String> = emptyList(),
     ) {
-        @Serializable
-        data class PropsObject(
-            val pageProps: PagePropsObject,
-        ) {
-            @Serializable
-            data class PagePropsObject(
-                val order: String?, // createdAt...
-                val videos: List<Video>,
-                val pageNum: Int,
-                val totalPage: Int,
-                val totalVideoNum: Int,
-                val tagsForCNAV: List<TagItem>?,
-                val tags91: List<TagItem>?,
-                val tagsOF: List<TagItem>?, // OnlyFans, only in tag browse
-                val hotSearches: List<String>?, // only in Search
-            ) {
-                fun toAnimePage(): AnimesPage {
-                    return AnimesPage(
-                        videos.map { video -> video.toSAnime() },
-                        pageNum < totalPage,
-                    )
-                }
-            }
-        }
+        fun toAnimePage(): AnimesPage = AnimesPage(
+            videos.map { it.toSAnime() },
+            pageNum < totalPage,
+        )
     }
 
     @Serializable
     data class HotVideoList(
-        val props: PropsObject,
+        val latestVideos: List<Video>,
+        val dailyHotCNAV: List<Video>,
+        val dailyHotSelfie: List<Video>,
+        val dailyHot91: List<Video>,
+        val dailyOnlyFans: List<Video>,
+        val dailyJV: List<Video>,
+        val hotCNAV: List<Video>,
+        val hotSelfie: List<Video>,
+        val hot91: List<Video>,
     ) {
-        @Serializable
-        data class PropsObject(
-            val pageProps: PagePropsObject,
-        ) {
-            @Serializable
-            data class PagePropsObject(
-                val latestVideos: List<Video>,
-                val dailyHotCNAV: List<Video>,
-                val dailyHotSelfie: List<Video>,
-                val dailyHot91: List<Video>,
-                val dailyOnlyFans: List<Video>,
-                val dailyJV: List<Video>,
-                val hotCNAV: List<Video>,
-                val hotSelfie: List<Video>,
-                val hot91: List<Video>,
-            ) {
-                fun toAnimePage(sort: String?): AnimesPage {
-                    return AnimesPage(
-                        listOf(
-                            latestVideos,
-                            dailyHotCNAV,
-                            dailyHotSelfie,
-                            dailyHot91,
-                            dailyOnlyFans,
-                            dailyJV,
-                            hotCNAV,
-                            hotSelfie,
-                            hot91,
-                        ).flatten()
-                            .sortedWith { vid1, vid2 ->
-                                when (sort) {
-                                    SORT_VIEW_KEY -> {
-                                        if (vid1.viewCount > vid2.viewCount) {
-                                            -1
-                                        } else if (vid1.viewCount < vid2.viewCount) {
-                                            1
-                                        } else {
-                                            vid2.createdAt.compareTo(vid1.createdAt)
-                                        }
-                                    }
-
-                                    SORT_LIKE_KEY -> {
-                                        if (vid1.likeCount == null && vid2.likeCount != null) {
-                                            1
-                                        } else if (vid1.likeCount != null && vid2.likeCount == null) {
-                                            -1
-                                        } else if (vid1.likeCount != null && vid2.likeCount != null) {
-                                            if (vid1.likeCount > vid2.likeCount) {
-                                                -1
-                                            } else {
-                                                1
-                                            }
-                                        } else {
-                                            vid2.createdAt.compareTo(vid1.createdAt)
-                                        }
-                                    }
-
-                                    else -> vid2.createdAt.compareTo(vid1.createdAt)
-                                }
-                            }
-                            .associateBy { it.id }
-                            .map { (_, video) -> video.toSAnime() },
-                        false,
-                    )
+        fun toAnimePage(sort: String?): AnimesPage {
+            val videos = listOf(
+                latestVideos,
+                dailyHotCNAV,
+                dailyHotSelfie,
+                dailyHot91,
+                dailyOnlyFans,
+                dailyJV,
+                hotCNAV,
+                hotSelfie,
+                hot91,
+            ).flatten().distinctBy { it.id }.sortedWith { first, second ->
+                val count = when (sort) {
+                    SORT_VIEW_KEY -> second.viewCount.compareTo(first.viewCount)
+                    SORT_LIKE_KEY -> compareValues(second.likeCount, first.likeCount)
+                    else -> 0
                 }
+                count.takeIf { it != 0 } ?: second.createdAt.compareTo(first.createdAt)
             }
+            return videos.toAnimePage()
         }
     }
 
@@ -125,20 +70,9 @@ internal object RouVideoDto {
 
     @Serializable
     data class VideoDetails(
-        val props: PropsObject,
-    ) {
-        @Serializable
-        data class PropsObject(
-            val pageProps: PagePropsObject,
-        ) {
-            @Serializable
-            data class PagePropsObject(
-                val video: Video,
-                val relatedVideos: List<Video>,
-                val ev: EncodedVideoData? = null,
-            )
-        }
-    }
+        val video: Video,
+        val ev: EncodedVideoData? = null,
+    )
 
     @Serializable
     data class EncodedVideoData(
@@ -150,19 +84,20 @@ internal object RouVideoDto {
     data class Video(
         val id: String,
         @SerialName("vid")
-        val code: String?,
+        val code: String? = null,
         val name: String,
-        val description: String?,
-        val ref: String?,
+        val description: String? = null,
+        val ref: String? = null,
         val tags: List<String>,
         val createdAt: String, // "2025-01-14T23:18:27.933Z"
         val viewCount: Int,
-        val likeCount: Int?, // not available in search & relatedVideos
+        val likeCount: Int? = null, // not available in search & relatedVideos
         val duration: Float, // in seconds
         val coverImageUrl: String,
-        val nameZh: String?,
-        val tagZh: List<String>?,
-        val sources: List<Source>?, // not available in details
+        val nameZh: String? = null,
+        @SerialName("tagsZh")
+        val tagZh: List<String>? = null,
+        val sources: List<Source>? = null, // not available in details
     ) {
         private val desc = StringBuilder().apply {
             sources?.firstOrNull()?.let { append("${resolutionDesc(it.resolution.toString())}\n") }
@@ -208,40 +143,24 @@ internal object RouVideoDto {
 
     @Serializable
     data class TagList(
-        val props: PropsObject,
+        val taxonomy: Taxonomy,
     ) {
-        @Serializable
-        data class PropsObject(
-            val pageProps: PagePropsObject,
-        ) {
-            @Serializable
-            data class PagePropsObject(
-                val gcAV: List<TagItem>,
-                val madouAV: List<TagItem>,
-                val v91: List<TagItem>,
-                val onlyfans: List<TagItem>,
-            ) {
-                fun toTagList(): Tags {
-                    return listOf(
-                        gcAV,
-                        madouAV,
-                        v91,
-                        onlyfans,
-                    ).flatten()
-                        .map { Pair(it.name, it.name) }
-                        .toTypedArray()
-                }
-            }
-        }
+        fun toTagList(): Tags = (
+            taxonomy.cats + taxonomy.genre + taxonomy.byParent.values.flatten()
+            ).map { Tag(it.name, it.name) }.distinct().toTypedArray()
     }
+
+    @Serializable
+    data class Taxonomy(
+        val cats: List<TagItem>,
+        val genre: List<TagItem>,
+        val byParent: Map<String, List<TagItem>>,
+    )
 
     @Serializable
     data class TagItem(
         @SerialName("id")
         val name: String,
-        val count: Int,
-        val parent: String,
-        val level: Int, // usually 0
     )
 
     @Serializable
@@ -253,10 +172,10 @@ internal object RouVideoDto {
     /* Not available in details */
     @Serializable
     data class Source(
-        val id: String?, // not available in relatedVideos
-        val videoId: String?, // not available in relatedVideos
+        val id: String? = null, // not available in relatedVideos
+        val videoId: String? = null, // not available in relatedVideos
         val resolution: Int,
-        val folder: String?, // not available in relatedVideos
+        val folder: String? = null, // not available in relatedVideos
     )
 
     private val DATE_FORMATTER by lazy {
@@ -267,3 +186,4 @@ internal object RouVideoDto {
         return runCatching { DATE_FORMATTER.parse(trim())?.time }.getOrNull() ?: 0L
     }
 }
+
