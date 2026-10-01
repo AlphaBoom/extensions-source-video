@@ -8,6 +8,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.io.File
+import java.util.Base64
 
 class RouVideoPageDataTest {
     private val json = Json { ignoreUnknownKeys = true }
@@ -62,21 +63,26 @@ class RouVideoPageDataTest {
             val expected = json.parseToJsonElement(File(directory, "$page.loader.json").readText())
             assertEquals(page, expected, actual)
             when (page) {
-                "home" -> assertTrue(json.decodeFromJsonElement<RouVideoDto.HotVideoList>(actual).toAnimePage(null).animes.isNotEmpty())
+                "home" -> assertTrue(json.decodeFromJsonElement<RouVideoDto.HotVideoList>(actual).latestVideos.isNotEmpty())
                 "categories" -> assertTrue(json.decodeFromJsonElement<RouVideoDto.TagList>(actual).toTagList().isNotEmpty())
                 "detail", "ordinary-detail" -> {
                     val detail = json.decodeFromJsonElement<RouVideoDto.VideoDetails>(actual)
                     assertTrue(detail.video.id.isNotEmpty())
                     assertTrue(detail.ev != null)
-                    assertEquals(detail.video.id, detail.video.toEpisode().url)
+                    val encoded = detail.ev!!
+                    val decoded = Base64.getDecoder().decode(encoded.d)
+                        .map { ((it.toInt() and 0xff) - encoded.k).toByte() }.toByteArray()
+                    val playback = json.decodeFromString<RouVideoDto.VideoData>(decoded.toString(Charsets.UTF_8))
+                    assertTrue(playback.videoUrl.isNotEmpty())
                 }
                 "search-home" -> assertTrue(json.decodeFromJsonElement<RouVideoDto.VideoList>(actual).hotSearches.isNotEmpty())
-                else -> assertTrue(json.decodeFromJsonElement<RouVideoDto.VideoList>(actual).toAnimePage().animes.isNotEmpty())
+                else -> assertTrue(json.decodeFromJsonElement<RouVideoDto.VideoList>(actual).videos.isNotEmpty())
             }
         }
         val first = json.decodeFromJsonElement<RouVideoDto.VideoList>(parse(File(directory, "latest-page-1.body").readText()))
         val second = json.decodeFromJsonElement<RouVideoDto.VideoList>(parse(File(directory, "latest-page-2.body").readText()))
-        assertTrue(first.toAnimePage().hasNextPage)
+        assertTrue(first.pageNum < first.totalPage)
         assertTrue(first.videos.map { it.id }.intersect(second.videos.map { it.id }.toSet()).isEmpty())
+        assertTrue(json.decodeFromString<List<RouVideoDto.Video>>(File(directory, "watching-api.body").readText()).isNotEmpty())
     }
 }

@@ -13,4 +13,3 @@ class RouVideoFactory : AnimeSourceFactory {
         )
     }
 }
-
