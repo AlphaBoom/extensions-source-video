@@ -143,18 +143,11 @@ internal object RouVideoDto {
 
     @Serializable
     data class TagList(
-        val taxonomy: Taxonomy? = null,
-        val gcAV: List<TagItem> = emptyList(),
-        val madouAV: List<TagItem> = emptyList(),
-        val v91: List<TagItem> = emptyList(),
-        val onlyfans: List<TagItem> = emptyList(),
+        val taxonomy: Taxonomy,
     ) {
-        fun toTagList(): Tags {
-            val tags = taxonomy?.let {
-                it.cats + it.genre + it.byParent.values.flatten()
-            } ?: (gcAV + madouAV + v91 + onlyfans)
-            return tags.map { Tag(it.name, it.name) }.distinct().toTypedArray()
-        }
+        fun toTagList(): Tags = (
+            taxonomy.cats + taxonomy.genre + taxonomy.byParent.values.flatten()
+            ).map { Tag(it.name, it.name) }.distinct().toTypedArray()
     }
 
     @Serializable

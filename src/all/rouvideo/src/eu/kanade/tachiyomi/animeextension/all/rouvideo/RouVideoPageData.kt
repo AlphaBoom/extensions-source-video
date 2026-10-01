@@ -16,11 +16,6 @@ internal object RouVideoPageData {
     private const val ROUTER_PREFIX = "\$_TSR.router=(\$R=>"
 
     fun parse(document: Document, json: Json): JsonObject {
-        document.selectFirst("script#__NEXT_DATA__")?.data()?.let {
-            return json.parseToJsonElement(it).jsonObject["props"]!!
-                .jsonObject["pageProps"]!!.jsonObject
-        }
-
         val script = document.select("script").map { it.data() }
             .firstOrNull { ROUTER_PREFIX in it }
             ?: throw IllegalStateException("RouVideo page data not found")
