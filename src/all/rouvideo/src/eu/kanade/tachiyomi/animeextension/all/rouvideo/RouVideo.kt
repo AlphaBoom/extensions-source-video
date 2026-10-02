@@ -25,6 +25,7 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.decodeFromJsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -88,7 +89,7 @@ class RouVideo(
 
     override fun popularAnimeRequest(page: Int): Request {
         fetchTagsListOnce()
-        if (page == 0) updateHotSearch()
+        if (page == 1) updateHotSearch()
 
         return GET(
             videoUrl.toHttpUrl().newBuilder().apply {
@@ -101,19 +102,14 @@ class RouVideo(
     }
 
     override fun popularAnimeParse(response: Response): AnimesPage {
-        val document = response.asJsoup()
-        val data = document.selectFirst("script#__NEXT_DATA__")?.data()
-            ?: return AnimesPage(emptyList(), false)
-
-        return json.decodeFromString<RouVideoDto.VideoList>(data)
-            .props.pageProps.toAnimePage()
+        return response.asJsoup().pageData<RouVideoDto.VideoList>().toAnimePage()
     }
 
     // =============================== Latest ===============================
 
     override fun latestUpdatesRequest(page: Int): Request {
         fetchTagsListOnce()
-        if (page == 0) updateHotSearch()
+        if (page == 1) updateHotSearch()
 
         return GET(
             videoUrl.toHttpUrl().newBuilder().apply {
@@ -142,7 +138,8 @@ class RouVideo(
         if (query.startsWith(PREFIX_TAG)) {
             val tagValue = query.removePrefix(PREFIX_TAG)
             val url = videoUrl.toHttpUrl().newBuilder().apply {
-                addPathSegments("$CATEGORY_SLUG/$tagValue")
+                addPathSegment(CATEGORY_SLUG)
+                addPathSegment(tagValue)
                 addQueryParameter("page", page.toString())
             }.build()
             return handleSearchAnime(url.toString(), docHeaders, ::popularAnimeParse)
@@ -150,7 +147,7 @@ class RouVideo(
 
         // For other search/browse types, ensure tags and hot searches are fetched
         fetchTagsListOnce()
-        if (page == 0) updateHotSearch()
+        if (page == 1) updateHotSearch()
 
         val categoryFilter = filters.filterIsInstance<RouVideoFilter.CategoryFilter>().firstOrNull()
         val sortFilter = filters.filterIsInstance<RouVideoFilter.SortFilter>().firstOrNull()
@@ -159,7 +156,7 @@ class RouVideo(
 
         val categoryUriPart = categoryFilter?.toUriPart()
 
-        if (query.isBlank() || categoryUriPart == FEATURED) {
+        if (query.isBlank()) {
             // Browsing scenarios (no text query)
             return when (categoryUriPart) {
                 WATCHING -> {
@@ -185,7 +182,7 @@ class RouVideo(
                 addQueryParameter("q", query)
 
                 // Add category to search query if it's a specific one (not null or empty string)
-                if (!categoryUriPart.isNullOrEmpty()) {
+                if (!categoryUriPart.isNullOrEmpty() && categoryUriPart !in setOf(FEATURED, WATCHING, ALL_VIDEOS)) {
                     addQueryParameter(CATEGORY_SLUG, categoryUriPart)
                 }
                 addQueryParameter("page", page.toString())
@@ -196,12 +193,7 @@ class RouVideo(
     }
 
     private fun Document.parseFeaturedPage(sortFilter: RouVideoFilter.SortFilter?): AnimesPage {
-        return this.selectFirst("script#__NEXT_DATA__")?.data()
-            ?.let {
-                json.decodeFromString<RouVideoDto.HotVideoList>(it)
-                    .props.pageProps.toAnimePage(sortFilter?.toUriPart())
-            }
-            ?: AnimesPage(emptyList(), false)
+        return pageData<RouVideoDto.HotVideoList>().toAnimePage(sortFilter?.toUriPart())
     }
 
     private fun buildBrowseUrl(
@@ -215,7 +207,8 @@ class RouVideo(
             when {
                 // Specific category (e.g., "asian") is provided
                 categoryUri != null && categoryUri != ALL_VIDEOS -> {
-                    addPathSegments("$CATEGORY_SLUG/$categoryUri")
+                    addPathSegment(CATEGORY_SLUG)
+                    addPathSegment(categoryUri)
                 }
                 // Tag filter is active
                 tagFilter?.isEmpty() == false -> {
@@ -226,8 +219,13 @@ class RouVideo(
                         addQueryParameter(CATEGORY_SLUG, tagFilter.toUriPart())
                     } else {
                         // Only tag filter is active => browse by tag
-                        addPathSegments("$CATEGORY_SLUG/${tagFilter.toUriPart()}")
+                        addPathSegment(CATEGORY_SLUG)
+                        addPathSegment(tagFilter.toUriPart())
                     }
+                }
+                hotSearchFilter?.isEmpty() == false -> {
+                    addPathSegment("search")
+                    addQueryParameter("q", hotSearchFilter.toUriPart())
                 }
                 else -> {
                     // Default to browsing all videos
@@ -303,8 +301,7 @@ class RouVideo(
             runCatching {
                 client.newCall(tagsListRequest())
                     .execute()
-                    .asJsoup()
-                    .let(::tagsListParse)
+                    .use { tagsListParse(it.asJsoup()) }
                     .let { tags ->
                         if (tags.isNotEmpty()) {
                             tagsArray = tags
@@ -318,12 +315,7 @@ class RouVideo(
      * Get the genres from the document.
      */
     private fun tagsListParse(document: Document): Tags {
-        return document.selectFirst("script#__NEXT_DATA__")?.data()
-            ?.let {
-                json.decodeFromString<RouVideoDto.TagList>(it)
-                    .props.pageProps.toTagList()
-            }
-            ?: emptyArray<Tag>()
+        return document.pageData<RouVideoDto.TagList>().toTagList()
     }
 
     private var savedTags: Set<Tag> = loadTagListFromPreferences()
@@ -349,8 +341,7 @@ class RouVideo(
         runCatching {
             client.newCall(hotSearchRequest())
                 .execute()
-                .asJsoup()
-                .let(::hotSearchParse)
+                .use { hotSearchParse(it.asJsoup()) }
                 .let {
                     hotSearch = if (!this::hotSearch.isInitialized) {
                         it
@@ -362,13 +353,7 @@ class RouVideo(
     }
 
     private fun hotSearchParse(document: Document): Set<String> {
-        return document.selectFirst("script#__NEXT_DATA__")?.data()
-            ?.let {
-                val hotSearches = json.decodeFromString<RouVideoDto.VideoList>(it)
-                    .props.pageProps.hotSearches
-                hotSearches?.toSet()
-            }
-            ?: emptySet()
+        return document.pageData<RouVideoDto.VideoList>().hotSearches.toSet()
     }
 
     // =========================== Anime Details ============================
@@ -381,7 +366,7 @@ class RouVideo(
             ?.groupValues?.get(1)
         return client.newCall(animeDetailsRequest(anime))
             .execute()
-            .let { response ->
+            .use { response ->
                 parseAnimeDetails(response, resolution)
             }
     }
@@ -391,9 +376,7 @@ class RouVideo(
     override fun animeDetailsParse(response: Response): SAnime = parseAnimeDetails(response)
 
     private fun parseAnimeDetails(response: Response, resolution: String? = null): SAnime {
-        val document = response.asJsoup()
-        val data = document.selectFirst("script#__NEXT_DATA__")?.data() ?: return SAnime.create()
-        val video = json.decodeFromString<RouVideoDto.VideoDetails>(data).props.pageProps.video
+        val video = response.asJsoup().pageData<RouVideoDto.VideoDetails>().video
 
         savedTags = savedTags.plus(video.getTagList())
 
@@ -414,9 +397,7 @@ class RouVideo(
     }
 
     override fun episodeListParse(response: Response): List<SEpisode> {
-        val document = response.asJsoup()
-        val data = document.selectFirst("script#__NEXT_DATA__")?.data() ?: return emptyList()
-        val video = json.decodeFromString<RouVideoDto.VideoDetails>(data).props.pageProps.video
+        val video = response.asJsoup().pageData<RouVideoDto.VideoDetails>().video
 
         return listOf(video.toEpisode())
     }
@@ -428,12 +409,7 @@ class RouVideo(
     override fun videoListRequest(episode: SEpisode) = GET(getEpisodeUrl(episode), docHeaders)
 
     override fun videoListParse(response: Response): List<Video> {
-        val pageData = response.asJsoup()
-            .selectFirst("script#__NEXT_DATA__")
-            ?.data()
-            ?: throw Exception("Video data not found")
-        val encodedData = json.decodeFromString<RouVideoDto.VideoDetails>(pageData)
-            .props.pageProps.ev
+        val encodedData = response.asJsoup().pageData<RouVideoDto.VideoDetails>().ev
             ?: throw Exception("Encoded video data not found")
         val decodedData = Base64.decode(encodedData.d, Base64.DEFAULT)
             .map { byte -> ((byte.toInt() and 0xff) - encodedData.k).toByte() }
@@ -471,6 +447,9 @@ class RouVideo(
     }
 
     // ============================= Utilities ==============================
+
+    private inline fun <reified T> Document.pageData(): T =
+        json.decodeFromJsonElement(RouVideoPageData.parse(this, json))
 
     private val resolutionRegex = Regex("""Resolution: (\d+)p""")
     companion object {
