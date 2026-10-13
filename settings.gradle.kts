@@ -8,6 +8,11 @@ pluginManagement {
 }
 
 dependencyResolutionManagement {
+    versionCatalogs {
+        create("kei") {
+            from(files("gradle/kei.versions.toml"))
+        }
+    }
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         google()
@@ -19,6 +24,7 @@ dependencyResolutionManagement {
 rootProject.name = "extensions-source-video"
 
 include(":core")
+include(":compiler")
 
 // Load all modules under /lib
 File(rootDir, "lib").eachDir { include("lib:${it.name}") }

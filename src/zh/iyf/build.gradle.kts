@@ -1,11 +1,14 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
-    id("video-extension")
+    alias(kei.plugins.extension)
 }
 
-videoExtension {
+keiyoushi {
     name = "iyf"
-    sourceClass = ".Iyf"
     versionCode = 2
+    contentWarning = ContentWarning.SAFE
+
     source {
         name = "爱壹帆"
         lang = "zh"

@@ -1,47 +1,47 @@
 package eu.kanade.tachiyomi.animeextension.all.rouvideo
 
 import eu.kanade.tachiyomi.animesource.model.AnimeFilter
-import eu.kanade.tachiyomi.lib.i18n.Intl
+import keiyoushi.lib.i18n.Intl
 
 internal object RouVideoFilter {
     class CategoryFilter(
         intl: Intl,
     ) : UriPartFilter(
-            intl["category"],
-            arrayOf(
-                Tag("<${intl["category"]}>", ""),
-                Tag(intl["featured"], FEATURED),
-                Tag(intl["other_watching"], WATCHING),
-            ).plus(categories(intl))
-                .plus(Tag(intl["all_videos"], ALL_VIDEOS)),
-        )
+        intl["category"],
+        arrayOf(
+            Tag("<${intl["category"]}>", ""),
+            Tag(intl["featured"], FEATURED),
+            Tag(intl["other_watching"], WATCHING),
+        ).plus(categories(intl))
+            .plus(Tag(intl["all_videos"], ALL_VIDEOS)),
+    )
 
     class TagFilter(
         intl: Intl,
         tags: Tags,
     ) : UriPartFilter(
-            intl["tag"],
-            tags,
-        )
+        intl["tag"],
+        tags,
+    )
 
     class HotSearchFilter(
         intl: Intl,
         keywords: Set<Pair<String, String>>,
     ) : UriPartFilter(
-            intl["hot_search"],
-            keywords.toTypedArray(),
-        )
+        intl["hot_search"],
+        keywords.toTypedArray(),
+    )
 
     class SortFilter(
         intl: Intl,
     ) : UriPartFilter(
-            intl["sort"],
-            arrayOf(
-                Pair(intl["latest_recent"], SORT_LATEST_KEY),
-                Pair(intl["most_viewed"], SORT_VIEW_KEY),
-                Pair(intl["most_liked"], SORT_LIKE_KEY),
-            ),
-        )
+        intl["sort"],
+        arrayOf(
+            Pair(intl["latest_recent"], SORT_LATEST_KEY),
+            Pair(intl["most_viewed"], SORT_VIEW_KEY),
+            Pair(intl["most_liked"], SORT_LIKE_KEY),
+        ),
+    )
 
     open class UriPartFilter(
         displayName: String,

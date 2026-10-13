@@ -22,11 +22,11 @@ class BuildMatrixTests(unittest.TestCase):
         self.previous = Path.cwd()
         os.chdir(self.temp.name)
         self.module = load_script('generate-build-matrices')
-        self.write('src/en/direct/build.gradle.kts', 'dependencies { implementation(project(":lib:middle")) }')
-        self.write('src/zh/themed/build.gradle.kts', 'videoExtension { theme = "theme" }')
+        self.write('src/en/direct/build.gradle.kts', 'keiyoushi { versionCode = 1 }\ndependencies { implementation(project(":lib:middle")) }')
+        self.write('src/zh/themed/build.gradle.kts', 'keiyoushi { theme = "theme" }')
         self.write('lib/leaf/build.gradle.kts', '')
         self.write('lib/middle/build.gradle.kts', 'dependencies { api(project(":lib:leaf")) }')
-        self.write('lib-multisrc/theme/build.gradle.kts', 'dependencies { api(project(":lib:middle")) }')
+        self.write('lib-multisrc/theme/build.gradle.kts', 'keiyoushi { baseVersionCode = 1 }\ndependencies { api(project(":lib:middle")) }')
 
     def tearDown(self):
         os.chdir(self.previous)
@@ -53,7 +53,7 @@ class BuildMatrixTests(unittest.TestCase):
         self.assertEqual(self.changed('M\tlib/leaf/src/Extractor.kt'), ([':src:en:direct'], ['en.direct']))
 
     def test_included_build_and_manifest_rebuild_every_extension(self):
-        for file in ['gradle/build-logic/src/main/kotlin/VideoExtensionPlugin.kt', 'common/AndroidManifest.xml']:
+        for file in ['gradle/build-logic/src/main/kotlin/ExtensionPlugin.kt', 'gradle/kei.versions.toml', 'common/proguard-rules.pro', 'compiler/src/main/kotlin/keiyoushi/processor/SourceProcessor.kt', 'core/src/main/kotlin/keiyoushi/source/KeiSource.kt']:
             with self.subTest(file=file):
                 self.assertEqual(self.changed(f'M\t{file}')[0], [':src:en:direct', ':src:zh:themed'])
 
@@ -62,6 +62,6 @@ class BuildMatrixTests(unittest.TestCase):
 
     def test_kotlin_version_bumps_cover_extensions_and_themes(self):
         bump = load_script('bump-versions')
-        source = 'versionCode = 17\nextra["baseVersionCode"] = 4\nextVersionCode = 2\n'
-        self.assertEqual(bump.VERSION_REGEX.sub(bump.replace_version, source), 'versionCode = 18\nextra["baseVersionCode"] = 5\nextVersionCode = 3\n')
+        source = 'versionCode = 17\nbaseVersionCode = 4\nextra["baseVersionCode"] = 4\nextVersionCode = 2\nandroidVersionCode = 9\n'
+        self.assertEqual(bump.VERSION_REGEX.sub(bump.replace_version, source), 'versionCode = 18\nbaseVersionCode = 5\nextra["baseVersionCode"] = 5\nextVersionCode = 3\nandroidVersionCode = 9\n')
         self.assertIn(Path('src/zh/themed/build.gradle.kts'), bump.find_files_with_match('theme = "theme"', include_multisrc=False))

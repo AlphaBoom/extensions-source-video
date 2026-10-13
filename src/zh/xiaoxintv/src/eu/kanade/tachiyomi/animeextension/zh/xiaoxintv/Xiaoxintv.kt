@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -27,13 +28,8 @@ import uy.kohesive.injekt.injectLazy
 private object HotSortFilter :
     PathFilter(FilterType.SORT.title, arrayOf(SearchSort("人气", "hits")))
 
-class Xiaoxintv : AnimeHttpSource() {
-    override val baseUrl: String
-        get() = "https://xiaoheimi.cc"
-    override val lang: String
-        get() = "zh"
-    override val name: String
-        get() = "小宝影院"
+@Source
+abstract class Xiaoxintv : AnimeHttpSource() {
     override val supportsLatest: Boolean
         get() = true
 

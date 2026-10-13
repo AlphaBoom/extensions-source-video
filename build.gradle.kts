@@ -1,12 +1,22 @@
+buildscript {
+    dependencies {
+        classpath(libs.kotlin.gradle)
+    }
+}
+
 plugins {
     alias(libs.plugins.android.application) apply false
     alias(libs.plugins.android.library) apply false
-    alias(libs.plugins.kotlin.jvm) apply false
     alias(libs.plugins.kotlin.serialization) apply false
-    id("video-format")
+    alias(kei.plugins.spotless)
 }
 
-tasks.named<Delete>("clean") {
-    delete(layout.buildDirectory)
-    dependsOn(gradle.includedBuild("build-logic").task(":clean"))
+val buildLogic: IncludedBuild = gradle.includedBuild("build-logic")
+
+tasks {
+    listOf("clean", "spotlessApply", "spotlessCheck").forEach { task ->
+        named(task) {
+            dependsOn(buildLogic.task(":$task"))
+        }
+    }
 }

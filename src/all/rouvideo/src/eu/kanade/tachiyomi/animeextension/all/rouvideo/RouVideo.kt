@@ -19,17 +19,20 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
-import eu.kanade.tachiyomi.lib.hlsproxy.HlsProxy
-import eu.kanade.tachiyomi.lib.hlsproxy.HlsProxyOptions
-import eu.kanade.tachiyomi.lib.i18n.Intl
-import eu.kanade.tachiyomi.lib.playlistutils.PlaylistUtils
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
+import keiyoushi.lib.hlsproxy.HlsProxy
+import keiyoushi.lib.hlsproxy.HlsProxyOptions
+import keiyoushi.lib.i18n.Intl
+import keiyoushi.lib.playlistutils.PlaylistUtils
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromJsonElement
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -38,12 +41,8 @@ import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.util.Locale
 
-class RouVideo(
-    override val lang: String = "all",
-) : AnimeHttpSource() {
-    override val name = "肉視頻"
-
-    override val baseUrl = "https://rou.video/home"
+@Source
+abstract class RouVideo : AnimeHttpSource() {
     private val videoUrl = "https://rou.video"
 
     private val apiUrl = "https://rou.video/api"
@@ -146,6 +145,10 @@ class RouVideo(
         query: String,
         filters: AnimeFilterList,
     ): AnimesPage {
+        // Deeplinks arrive as full https://rou.video/v/<id> or /t/<tag> URLs.
+        val linkQuery = query.toHttpUrlOrNull()?.toPrefixedQuery()
+        if (linkQuery != null) return getSearchAnime(page, linkQuery, filters)
+
         // Handle direct ID search (no need for tag/hot search fetching)
         if (query.startsWith(PREFIX_ID)) {
             val id = query.removePrefix(PREFIX_ID)
@@ -400,6 +403,17 @@ class RouVideo(
 
     private fun animeUrl(id: String) = "$videoUrl/$VIDEO_SLUG/$id"
 
+    private fun HttpUrl.toPrefixedQuery(): String? {
+        if (host.removePrefix("www.") != videoUrl.toHttpUrl().host) return null
+        val segments = pathSegments.filter { it.isNotEmpty() }
+        if (segments.size < 2) return null
+        return when (segments[0]) {
+            VIDEO_SLUG -> PREFIX_ID + segments[1]
+            CATEGORY_SLUG -> PREFIX_TAG + segments[1]
+            else -> null
+        }
+    }
+
     override fun getAnimeUrl(anime: SAnime) = animeUrl(anime.url)
 
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
@@ -482,9 +496,9 @@ class RouVideo(
                 playlistUrl = playbackUrl,
                 headers = playbackHeaders,
                 options =
-                    HlsProxyOptions(
-                        bodyTransformers = listOf(RouVideoHlsTransformer),
-                    ),
+                HlsProxyOptions(
+                    bodyTransformers = listOf(RouVideoHlsTransformer),
+                ),
             )
 
         return listOf(

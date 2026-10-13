@@ -1,14 +1,26 @@
-import com.android.build.api.dsl.LibraryExtension
-
 plugins {
-    id("lib-android")
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.serialization)
+
+    alias(kei.plugins.android.base)
+    alias(kei.plugins.spotless)
 }
 
-extensions.configure<LibraryExtension> {
-    namespace = "eu.kanade.tachiyomi.lib.core"
-    sourceSets.getByName("main").apply {
-        manifest.srcFile("AndroidManifest.xml")
-        res.directories.clear()
-        res.directories.add("res")
+android {
+    namespace = "keiyoushi.core"
+
+    buildFeatures {
+        resValues = false
     }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
+}
+
+dependencies {
+    compileOnly(libs.bundles.common)
+
+    testImplementation(libs.bundles.common)
+    testImplementation(libs.junit)
 }

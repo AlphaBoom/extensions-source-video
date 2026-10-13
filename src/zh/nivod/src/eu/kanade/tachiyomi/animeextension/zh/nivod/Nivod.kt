@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
 import eu.kanade.tachiyomi.util.parseAs
+import keiyoushi.annotation.Source
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -26,13 +27,8 @@ import uy.kohesive.injekt.injectLazy
 import java.net.URLEncoder
 import java.util.Calendar
 
-class Nivod : AnimeHttpSource() {
-    override val baseUrl: String
-        get() = "https://www.nivod.cc"
-    override val lang: String
-        get() = "zh"
-    override val name: String
-        get() = "泥视频"
+@Source
+abstract class Nivod : AnimeHttpSource() {
     override val supportsLatest: Boolean
         get() = true
 
@@ -232,20 +228,20 @@ class Nivod : AnimeHttpSource() {
         PREF_KEY_TV_FILTER -> {
             FilterConfig(
                 regions =
-                    mapOf(
-                        "全部地区" to "",
-                        "大陆" to "cn",
-                        "台湾" to "tw",
-                        "日本" to "jp",
-                    ),
+                mapOf(
+                    "全部地区" to "",
+                    "大陆" to "cn",
+                    "台湾" to "tw",
+                    "日本" to "jp",
+                ),
                 types =
-                    mapOf(
-                        "全部类型" to "",
-                        "剧情" to "ju-qing",
-                        "动作" to "dong-zuo",
-                        "历史" to "li-shi",
-                        "历险" to "mao-xian",
-                    ),
+                mapOf(
+                    "全部类型" to "",
+                    "剧情" to "ju-qing",
+                    "动作" to "dong-zuo",
+                    "历史" to "li-shi",
+                    "历险" to "mao-xian",
+                ),
                 years = createDefaultYearMap(),
             )
         }
@@ -253,19 +249,19 @@ class Nivod : AnimeHttpSource() {
         PREF_KEY_MOVIE_FILTER -> {
             FilterConfig(
                 regions =
-                    mapOf(
-                        "全部地区" to "",
-                        "大陆" to "cn",
-                        "台湾" to "tw",
-                        "日本" to "jp",
-                    ),
+                mapOf(
+                    "全部地区" to "",
+                    "大陆" to "cn",
+                    "台湾" to "tw",
+                    "日本" to "jp",
+                ),
                 types =
-                    mapOf(
-                        "全部类型" to "",
-                        "冒险" to "mao-xian",
-                        "剧情" to "ju-qing",
-                        "动作" to "dong-zuo",
-                    ),
+                mapOf(
+                    "全部类型" to "",
+                    "冒险" to "mao-xian",
+                    "剧情" to "ju-qing",
+                    "动作" to "dong-zuo",
+                ),
                 years = createDefaultYearMap(),
             )
         }
@@ -273,21 +269,21 @@ class Nivod : AnimeHttpSource() {
         PREF_KEY_SHOW_FILTER -> {
             FilterConfig(
                 regions =
-                    mapOf(
-                        "全部地区" to "",
-                        "大陆" to "cn",
-                        "韩国" to "kr",
-                        "欧美" to "west",
-                        "其他" to "other",
-                    ),
+                mapOf(
+                    "全部地区" to "",
+                    "大陆" to "cn",
+                    "韩国" to "kr",
+                    "欧美" to "west",
+                    "其他" to "other",
+                ),
                 types =
-                    mapOf(
-                        "全部类型" to "",
-                        "搞笑" to "gao-xiao",
-                        "音乐" to "yin-yue",
-                        "真人秀" to "zhen-ren-xiu",
-                        "脱口秀" to "tuo-kou-xiu",
-                    ),
+                mapOf(
+                    "全部类型" to "",
+                    "搞笑" to "gao-xiao",
+                    "音乐" to "yin-yue",
+                    "真人秀" to "zhen-ren-xiu",
+                    "脱口秀" to "tuo-kou-xiu",
+                ),
                 years = createDefaultYearMap(),
             )
         }
@@ -295,22 +291,22 @@ class Nivod : AnimeHttpSource() {
         else -> {
             FilterConfig(
                 regions =
-                    mapOf(
-                        "全部地区" to "",
-                        "大陆" to "cn",
-                        "日本" to "jp",
-                        "欧美" to "west",
-                    ),
+                mapOf(
+                    "全部地区" to "",
+                    "大陆" to "cn",
+                    "日本" to "jp",
+                    "欧美" to "west",
+                ),
                 types =
-                    mapOf(
-                        "全部类型" to "",
-                        "冒险" to "mao-xian",
-                        "动画电影" to "movie",
-                        "推理" to "tui-li",
-                        "校园" to "xiao-yuan",
-                        "治愈" to "zhi-yu",
-                        "泡面" to "pao-mian",
-                    ),
+                mapOf(
+                    "全部类型" to "",
+                    "冒险" to "mao-xian",
+                    "动画电影" to "movie",
+                    "推理" to "tui-li",
+                    "校园" to "xiao-yuan",
+                    "治愈" to "zhi-yu",
+                    "泡面" to "pao-mian",
+                ),
                 years = createDefaultYearMap(),
             )
         }

@@ -1,8 +1,8 @@
 # Contributing
 
-> Extensions target **Aniyomi extensions-lib API 17** and are built with JDK 25,
-> Android SDK 37 and Kotlin DSL (`build.gradle.kts`). See
-> [the infrastructure guide](docs/infrastructure.md) for the build plugins and API 17 details.
+> Extensions target **Aniyomi extensions-lib API 17** and use the build system, KSP
+> source generation and `core` library ported from Keiyoushi. See
+> [the infrastructure guide](docs/infrastructure.md) for the plugins, `KeiSource` and API 17 details.
 
 This guide have some instructions and tips on how to create a new Aniyomi extension. Please **read it carefully** if you're a new contributor or don't have any experience on the required languages and knowledges.
 
@@ -184,8 +184,8 @@ The simplest extension structure looks like this:
 ```console
 $ tree src/<lang>/<mysourcename>/
 src/<lang>/<mysourcename>/
-├── AndroidManifest.xml (optional)
 ├── build.gradle.kts
+├── proguard-rules.pro (optional)
 ├── res
 │   ├── mipmap-hdpi
 │   │   └── ic_launcher.png
@@ -214,26 +214,22 @@ src/<lang>/<mysourcename>/
 should be adapted from the site name, and can only contain lowercase ASCII letters and digits.
 Your extension code must be placed in the package `eu.kanade.tachiyomi.animeextension.<lang>.<mysourcename>`.
 
-#### AndroidManifest.xml (optional)
-You only need to create this file if you want to add deep linking to your extension.
-See [URL intent filter](#url-intent-filter) for more information.
-
 #### build.gradle.kts
 Make sure that your new extension's `build.gradle.kts` file follows the following structure:
 
 ```kotlin
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
-    id("video-extension")
+    alias(kei.plugins.extension)
 }
 
-videoExtension {
+keiyoushi {
     name = "<My source name>"
-    sourceClass = ".<MySourceName>"
     versionCode = 1
-    contentWarning = 0
+    contentWarning = ContentWarning.SAFE
 
     source {
-        name = "<My source name>"
         lang = "<lang>"
         baseUrl = "https://example.com"
     }
@@ -243,16 +239,19 @@ videoExtension {
 | Field | Description |
 | ----- | ----------- |
 | `name` | The name of the extension. Should be romanized if site name is not in English. |
-| `sourceClass` | Points to the class that implements `AnimeSource` or `AnimeSourceFactory`, relative to the extension package (starts with a dot). |
 | `versionCode` | The extension revision (1..999). It must be incremented with any change to the code. |
-| `contentWarning` | (Optional, defaults to `0`) `0` safe, `1` mixed, `2` NSFW. Any non-zero value also sets the legacy NSFW flag. |
+| `contentWarning` | `ContentWarning.SAFE`, `MIXED` or `NSFW`. Anything but `SAFE` also sets the legacy NSFW flag. |
 | `torrent` | (Optional, defaults to `false`) Whether the extension returns torrent videos. |
 | `theme` | (Optional) Name of a `lib-multisrc` theme the extension builds upon. See [Multi-source themes](#multi-source-themes). |
-| `baseUrl` | (Optional) Fills the `SOURCEHOST`/`SOURCESCHEME` manifest placeholders for [URL intent filters](#url-intent-filter). |
-| `source { }` | One block for **every** source exposed by the class: `name`, `lang`, `baseUrl`, plus `versionId` or `id` when the Kotlin source overrides them. This metadata is packaged into the APK and published to the repository index. |
+| `pkgName` | (Optional) Overrides the `<lang>.<folder>` package suffix, to keep an old package after renaming the folder. |
+| `source { }` | One block for **every** source: `lang`, `baseUrl` (or `baseUrl { mirrors(...) }` / `baseUrl { custom(...) }`), and optionally `name` (defaults to the extension name), `versionId` and `id`. The KSP processor generates these members, and the metadata is packaged into the APK and published to the repository index. |
+| `deeplink { }` | (Optional) URL patterns the extension opens. See [URL intent filter](#url-intent-filter). |
 
-The extension's version name is `17.<revision>` and the Android version code is `17000 + revision`.
+The extension's version name is `17.<versionCode>` and the Android version code is `17000 + versionCode`.
 With the example used above, the version would be `17.1`.
+
+The manifest is generated from these values. Add an `AndroidManifest.xml` only for extra components,
+and a `proguard-rules.pro` when a bundled dependency needs R8 keep rules: release APKs are minified.
 
 ### Core dependencies
 
@@ -287,11 +286,18 @@ Note that using `compileOnly` restricts you to versions that must be compatible 
 
 ### Extension main class
 
-The class which is referenced and defined by `sourceClass` in `build.gradle.kts`. This class should implement either `AnimeSourceFactory` or extend one of the `AnimeSource` implementations: `AnimeHttpSource` or `ParsedAnimeHttpSource`.
+The source class is annotated with `@Source` (`keiyoushi.annotation.Source`), and should be `abstract` and extend `KeiSource`, `AnimeHttpSource` or `ParsedAnimeHttpSource`. Don't override `name`, `lang`, `id` or `versionId`, nor a static `baseUrl`: the KSP processor generates them from the `source { }` blocks in a `keiyoushi.source.Generated` subclass, or in an `AnimeSourceFactory` when there are several blocks.
+
+```kotlin
+@Source
+abstract class MySourceName : AnimeHttpSource() {
+    // ...
+}
+```
 
 | Class | Description |
 | ----- | ----------- |
-|`AnimeSourceFactory`| Used to expose multiple `AnimeSource`s. Use this in case of a source that supports multiple languages or mirrors of the same website. For similar websites use [theme sources](#multi-source-themes). |
+| `KeiSource` | Suspend-first base class from `core` with client/header defaults, URL search, fetched filter caching and combined episode updates. |
 | `AnimeHttpSource`| For online source, where requests are made using HTTP. |
 | `ParsedAnimeHttpSource`| Similar to `AnimeHttpSource`, but has methods useful for scraping pages. |
 
@@ -302,7 +308,9 @@ The class which is referenced and defined by `sourceClass` in `build.gradle.kts`
 | `name` | Name displayed in the "Sources" tab in Aniyomi. |
 | `baseUrl` | Base URL of the source without any trailing slashes. |
 | `lang` | An ISO 639-1 compliant language code (two letters in lower case in most cases, but can also include the country/dialect part by using a simple dash character). |
-| `id` | Identifier of your source, automatically set in `AnimeHttpSource`. It should only be manually overriden if you need to copy an existing autogenerated ID. |
+| `id` | Identifier of your source, generated from `name`, `lang` and `versionId`. Set `id` in the `source { }` block only to keep an existing ID. |
+
+Multiple languages or mirrors of the same website are declared as several `source { }` blocks; the generated factory creates one instance per block. For similar websites use [theme sources](#multi-source-themes).
 
 ### Extension call flow
 
@@ -414,8 +422,18 @@ open class UriPartFilter(displayName: String, private val vals: Array<Pair<Strin
 
 #### URL intent filter
 
-Extensions can define URL intent filters by defining it inside a custom `AndroidManifest.xml` file.
-For an example, refer to [the AniWatch module's `AndroidManifest.xml` file](https://github.com/aniyomiorg/aniyomi-extensions/blob/master/src/en/aniwatch/AndroidManifest.xml) and [its corresponding `AniWatchUrlActivity` handler](https://github.com/aniyomiorg/aniyomi-extensions/blob/master/src/en/aniwatch/src/eu/kanade/tachiyomi/animeextension/en/zoro/AniWatchUrlActivity.kt).
+Extensions declare the URLs they open with `deeplink { }` blocks in `build.gradle.kts`:
+
+```kotlin
+keiyoushi {
+    deeplink {
+        host("www.example.com") // Optional, defaults to the hosts of the source base URLs
+        path("/anime/..*")
+    }
+}
+```
+
+The generated manifest routes them to `keiyoushi.source.UrlActivity`, which opens Aniyomi's search with the full URL as the query. Sources extending `KeiSource` resolve it in `getAnimeByUrl`; other sources should check for URL queries in `getSearchAnime`.
 
 To test if the URL intent filter is working as expected, you can try opening the website in a browser and navigating to the endpoint that was added as a filter or clicking a hyperlink. Alternatively, you can use the `adb` command below.
 
@@ -427,15 +445,20 @@ $ adb shell am start -d "<your-link>" -a android.intent.action.VIEW
 
 There is some cases where existing sources changes their name on the website. To correctly reflect these changes in the extension, you need to explicity set the `id` to the same old value, otherwise it will get changed by the new `name` value and users will be forced to migrate back to the source.
 
-To get the current `id` value before the name change, you can search the source name in the [repository JSON file](https://github.com/aniyomiorg/aniyomi-extensions/blob/repo/index.json) by looking into the `sources` attribute of the extension. When you have the `id` copied, you can override it in the source:
+To get the current `id` value before the name change, you can search the source name in the [repository JSON file](https://github.com/AlphaBoom/extensions-source-video/blob/repo/index.min.json) by looking into the `sources` attribute of the extension. When you have the `id` copied, set it in the source block:
 
 ```kotlin
-override val id: Long = <the-id>
+source {
+    name = "<new name>"
+    lang = "<lang>"
+    baseUrl = "https://example.com"
+    id = <the-id>L
+}
 ```
 
-Then the class name and the `name` attribute value can be changed. Also update the matching `source { }` block in `build.gradle.kts` (set its `id` to the same old value) and, if needed, `name`/`sourceClass`.
+Then the class name and the `name` value can be changed.
 
-**Important:** the package name **needs** to be the same (even if it has the old name), otherwise users will not receive the extension update when it gets published in the repository. The package name comes from the `src/<lang>/<folder>` directory, so keep the folder name.
+**Important:** the package name **needs** to be the same (even if it has the old name), otherwise users will not receive the extension update when it gets published in the repository. The package name comes from the `src/<lang>/<folder>` directory: keep the folder name, or set `pkgName` to the old suffix.
 
 The `id` also needs to be explicity set to the old value if you're changing the `lang` attribute.
 
@@ -459,21 +482,23 @@ A theme's `build.gradle.kts`:
 
 ```kotlin
 plugins {
-    id("lib-multisrc")
+    alias(kei.plugins.multisrc)
 }
 
-extra["baseVersionCode"] = 1
+keiyoushi {
+    baseVersionCode = 1
+    // deeplink { path("/anime/..*") } // Shared by every extension using the theme
+}
 ```
 
-An extension using the theme declares it in its own `build.gradle.kts`:
+An extension using the theme declares it in its own `build.gradle.kts`, and its `@Source` class extends the theme:
 
 ```kotlin
-videoExtension {
+keiyoushi {
     name = "<My source name>"
-    sourceClass = ".<MySourceName>"
     theme = "<theme>"
     versionCode = 1
-    baseUrl = "https://example.com" // only needed for deep links
+    contentWarning = ContentWarning.SAFE
     source { ... }
 }
 ```
@@ -609,8 +634,8 @@ If all went well, you should see all requests and responses made by the source i
 APKs can be created in Android Studio via `Build > Build Bundle(s) / APK(s) > Build APK(s)`, or from the command line:
 
 ```console
-$ ./gradlew spotlessApply                  # format sources (builds never reformat automatically)
-$ ./gradlew spotlessCheck :src:<lang>:<source>:assembleDebug
+$ ./gradlew :src:<lang>:<source>:assembleDebug     # also runs spotlessApply
+$ ./gradlew :src:<lang>:<source>:assembleRelease   # R8-minified, as published
 ```
 
 ## Submitting the changes
@@ -624,10 +649,10 @@ Please **do test your changes by compiling it through Android Studio** before su
 ### Pull Request checklist
 
 - Update `versionCode` in `build.gradle.kts` for individual extensions
-- Update `extra["baseVersionCode"]` in a theme's `build.gradle.kts` when the theme changes
+- Update `baseVersionCode` in a theme's `build.gradle.kts` when the theme changes
 - Reference all related issues in the PR body (e.g. "Closes #xyz")
 - Set `contentWarning` in `build.gradle.kts` when appropriate
-- Keep `source { }` blocks in sync with the Kotlin sources
+- Declare every source in a `source { }` block and annotate the source class with `@Source`
 - Explicitly kept the `id` if a source's name or language were changed
-- Run `./gradlew spotlessCheck`
+- Run `./gradlew spotlessCheck` and build the release variant
 - Test the modifications by compiling and running the extension through Android Studio

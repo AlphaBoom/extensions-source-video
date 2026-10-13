@@ -19,6 +19,7 @@ import eu.kanade.tachiyomi.animesource.online.ParsedAnimeHttpSource
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
@@ -28,15 +29,10 @@ import org.jsoup.nodes.Element
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-class Rule34Video :
+@Source
+abstract class Rule34Video :
     ParsedAnimeHttpSource(),
     ConfigurableAnimeSource {
-    override val name = "Rule34Video"
-
-    override val baseUrl = "https://rule34video.com"
-
-    override val lang = "en"
-
     override val supportsLatest = false
 
     override val supportsRelatedAnime = false
@@ -376,9 +372,9 @@ class Rule34Video :
     private class TagSearch(
         results: Array<Pair<String, String>>,
     ) : UriPartFilter(
-            "Tag Filter ",
-            results,
-        )
+        "Tag Filter ",
+        results,
+    )
 
     private class CategoryBy :
         UriPartFilter(

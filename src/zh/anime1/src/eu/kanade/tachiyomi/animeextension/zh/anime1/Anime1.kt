@@ -16,13 +16,14 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
-import eu.kanade.tachiyomi.lib.bangumiscraper.BangumiFetchType
-import eu.kanade.tachiyomi.lib.bangumiscraper.BangumiScraper
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import eu.kanade.tachiyomi.util.parseAs
+import keiyoushi.annotation.Source
+import keiyoushi.lib.bangumiscraper.BangumiFetchType
+import keiyoushi.lib.bangumiscraper.BangumiScraper
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.contentOrNull
@@ -40,15 +41,10 @@ import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Anime1 :
+@Source
+abstract class Anime1 :
     AnimeHttpSource(),
     ConfigurableAnimeSource {
-    override val baseUrl: String
-        get() = "https://anime1.me"
-    override val lang: String
-        get() = "zh-hant"
-    override val name: String
-        get() = "Anime1.me"
     override val supportsLatest: Boolean
         get() = true
 

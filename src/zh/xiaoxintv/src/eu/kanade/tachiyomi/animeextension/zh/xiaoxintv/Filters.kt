@@ -149,12 +149,12 @@ private val defaultSearchFilterConfig =
             SearchFilterConfig(
                 type = listOf(typeAll, SearchType("国产动漫", 51), SearchType("日本动漫", 52)),
                 category =
-                    listOf(
-                        categoryAll,
-                        SearchClass("热血"),
-                        SearchClass("格斗"),
-                        SearchClass("其他"),
-                    ),
+                listOf(
+                    categoryAll,
+                    SearchClass("热血"),
+                    SearchClass("格斗"),
+                    SearchClass("其他"),
+                ),
                 year = listOf(yearAll),
                 lang = defaultLangList,
             ),

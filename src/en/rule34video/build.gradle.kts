@@ -1,14 +1,22 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
-    id("video-extension")
+    alias(kei.plugins.extension)
 }
 
-videoExtension {
+keiyoushi {
     name = "Rule34Video"
-    sourceClass = ".Rule34Video"
     versionCode = 12
-    contentWarning = 2
+    contentWarning = ContentWarning.NSFW
+
+    deeplink {
+        host("rule34video.com")
+        host("www.rule34video.com")
+        path("/videos/..*")
+        path("/video/..*")
+    }
+
     source {
-        name = "Rule34Video"
         lang = "en"
         baseUrl = "https://rule34video.com"
     }

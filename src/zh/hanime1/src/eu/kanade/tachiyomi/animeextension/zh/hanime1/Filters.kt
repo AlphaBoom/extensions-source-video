@@ -25,18 +25,18 @@ open class TagFilter(
 class GenreFilter(
     values: Array<String>,
 ) : QueryFilter(
-        "影片類型",
-        "genre",
-        values.ifEmpty { arrayOf("全部", "裏番", "泡面番", "Motion Anime") },
-    )
+    "影片類型",
+    "genre",
+    values.ifEmpty { arrayOf("全部", "裏番", "泡面番", "Motion Anime") },
+)
 
 class SortFilter(
     values: Array<String>,
 ) : QueryFilter(
-        "排序方式",
-        "sort",
-        values.ifEmpty { arrayOf("最新上市", "最新上傳", "本日排行", "本週排行", "本月排行") },
-    )
+    "排序方式",
+    "sort",
+    values.ifEmpty { arrayOf("最新上市", "最新上傳", "本日排行", "本週排行", "本月排行") },
+)
 
 object HotFilter : TagFilter("sort", "本週排行", true)
 
@@ -63,12 +63,12 @@ open class TimeFilter(
 class YearFilter(
     values: Array<String>,
 ) : TimeFilter(
-        "發佈年份",
-        "年",
-        values.ifEmpty { arrayOf("全部年份") },
-        orderIndex = 0,
-        suffix = "+",
-    )
+    "發佈年份",
+    "年",
+    values.ifEmpty { arrayOf("全部年份") },
+    orderIndex = 0,
+    suffix = "+",
+)
 
 class MonthFilter(
     values: Array<String>,

@@ -1,12 +1,14 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
-    id("video-extension")
+    alias(kei.plugins.extension)
 }
 
-videoExtension {
+keiyoushi {
     name = "Hanime1"
-    sourceClass = ".Hanime1"
     versionCode = 13
-    contentWarning = 2
+    contentWarning = ContentWarning.NSFW
+
     source {
         name = "Hanime1.me"
         lang = "zh"

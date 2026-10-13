@@ -7,7 +7,7 @@ import re
 import subprocess
 import sys
 
-VERSION_REGEX = re.compile(r'(versionCode\s*=\s*|extVersionCode\s*=\s*|extra\["baseVersionCode"\]\s*=\s*)(\d+)')
+VERSION_REGEX = re.compile(r'(\b(?:base)?[vV]ersionCode\s*=\s*|extVersionCode\s*=\s*|extra\["baseVersionCode"\]\s*=\s*)(\d+)')
 BUMPED_FILES: list[Path] = []
 
 BOT_EMAIL = "177773202+Kohi-den-Bot@users.noreply.github.com"

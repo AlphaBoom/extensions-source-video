@@ -79,7 +79,7 @@ jobs:
         run: |
           TASKS=()
           for module in $MODULES; do
-            TASKS+=("${module}:assembleDebug")
+            TASKS+=("${module}:assembleRelease")
           done
           chmod +x ./gradlew
           ./gradlew spotlessCheck "${TASKS[@]}"

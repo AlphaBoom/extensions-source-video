@@ -149,7 +149,7 @@ internal object RouVideoDto {
     ) {
         fun toTagList(): Tags = (
             taxonomy.cats + taxonomy.genre + taxonomy.byParent.values.flatten()
-        ).map { Tag(it.name, it.name) }.distinct().toTypedArray()
+            ).map { Tag(it.name, it.name) }.distinct().toTypedArray()
     }
 
     @Serializable

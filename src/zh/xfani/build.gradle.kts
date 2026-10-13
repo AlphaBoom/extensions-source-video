@@ -1,11 +1,14 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
-    id("video-extension")
+    alias(kei.plugins.extension)
 }
 
-videoExtension {
+keiyoushi {
     name = "Xfani"
-    sourceClass = ".Xfani"
     versionCode = 10
+    contentWarning = ContentWarning.SAFE
+
     source {
         name = "稀饭动漫"
         lang = "zh"

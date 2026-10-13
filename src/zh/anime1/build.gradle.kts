@@ -1,13 +1,15 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
-    id("video-extension")
+    alias(kei.plugins.extension)
 }
 
-videoExtension {
+keiyoushi {
     name = "Anime1.me"
-    sourceClass = ".Anime1"
     versionCode = 5
+    contentWarning = ContentWarning.SAFE
+
     source {
-        name = "Anime1.me"
         lang = "zh-hant"
         baseUrl = "https://anime1.me"
     }

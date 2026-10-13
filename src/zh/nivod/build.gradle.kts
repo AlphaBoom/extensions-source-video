@@ -1,11 +1,14 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
-    id("video-extension")
+    alias(kei.plugins.extension)
 }
 
-videoExtension {
+keiyoushi {
     name = "Nivod"
-    sourceClass = ".Nivod"
     versionCode = 3
+    contentWarning = ContentWarning.SAFE
+
     source {
         name = "泥视频"
         lang = "zh"

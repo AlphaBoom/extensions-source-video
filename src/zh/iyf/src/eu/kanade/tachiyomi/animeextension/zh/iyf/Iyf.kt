@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.util.asJsoup
 import eu.kanade.tachiyomi.util.parseAs
+import keiyoushi.annotation.Source
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonArray
@@ -28,13 +29,8 @@ import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Iyf : AnimeHttpSource() {
-    override val baseUrl: String
-        get() = "https://www.iyf.tv"
-    override val lang: String
-        get() = "zh"
-    override val name: String
-        get() = "爱壹帆"
+@Source
+abstract class Iyf : AnimeHttpSource() {
     override val supportsLatest: Boolean
         get() = true
 

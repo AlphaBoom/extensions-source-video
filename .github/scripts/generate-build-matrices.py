@@ -10,7 +10,7 @@ EXTENSION_REGEX = re.compile(r"^src/(?P<lang>[^/]+)/(?P<extension>[^/]+)")
 MULTISRC_LIB_REGEX = re.compile(r"^lib-multisrc/(?P<multisrc>[^/]+)")
 LIB_REGEX = re.compile(r"^lib/(?P<lib>[^/]+)")
 CORE_FILES_REGEX = re.compile(
-    r"^(buildSrc/|common/|core/|gradle/|build\.gradle\.kts|common\.gradle|"
+    r"^(buildSrc/|common/|compiler/|core/|gradle/|build\.gradle\.kts|common\.gradle|"
     r"gradle\.properties|gradlew(?:\.bat)?|repositories\.gradle\.kts|"
     r"settings\.gradle\.kts|\.editorconfig$|"
     r"\.github/scripts/|\.github/workflows/build_(?:push|pull_request)\.yml$)"

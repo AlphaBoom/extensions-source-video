@@ -14,16 +14,16 @@ abstract class TagFilter(
     name: String,
     values: Array<String>,
 ) : SelectFilter(
-        name,
-        values
-            .mapIndexed { index, s ->
-                if (index == 0) {
-                    s to ""
-                } else {
-                    s to s
-                }
-            }.toTypedArray(),
-    )
+    name,
+    values
+        .mapIndexed { index, s ->
+            if (index == 0) {
+                s to ""
+            } else {
+                s to s
+            }
+        }.toTypedArray(),
+)
 
 class TypeFilter(
     kv: Array<Pair<String, String>> =

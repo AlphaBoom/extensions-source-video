@@ -1,30 +1,42 @@
 # Extension infrastructure
 
-This repository builds **anime/video extensions** for Aniyomi. Keiyoushi is the
-reference for shared build infrastructure; its manga API and host runtime are not
-interchangeable with Aniyomi's video API.
+This repository builds **anime/video extensions** for Aniyomi. The build system,
+`core` library and KSP source generation are ported from Keiyoushi and adapted to
+Aniyomi's video API (extensions-lib v17); Keiyoushi's manga API and host runtime are
+not interchangeable with it.
 
 ## Upstream snapshots
 
 Reviewed on 2026-10-13:
 
-- [Keiyoushi](https://github.com/keiyoushi/extensions-source/tree/b5d2cd5c3d23a3408c7daa3eb807668aedfce3e0): Gradle 9.8.1, AGP 9.4.1, Kotlin 2.4.10, SDK 37, included build logic, explicit formatting and source metadata.
-- [Yuzono](https://github.com/yuzono/tachiyomi-extensions/tree/33f39638b967b40015424a86f6a04cacd7bd06d4): the same shared build baseline.
-- [Yuzono anime extensions](https://github.com/yuzono/anime-extensions/tree/8bbb8180517b50327ea5965c4629fe15571cbc74): included build logic and Kotlin DSL, with a Komikku-specific API/runtime fork. Its Injekt and serialization pins are specific to that host and are not copied into official Aniyomi API 17 extensions.
+- [Keiyoushi](https://github.com/keiyoushi/extensions-source/tree/b5d2cd5c3d23a3408c7daa3eb807668aedfce3e0): `kei.plugins.*` build logic, `keiyoushi { }` DSL, KSP `@Source` processor, `core` utilities, R8 rules. Gradle 9.8.1, AGP 9.4.1, Kotlin 2.4.10, SDK 37.
+- [Yuzono anime extensions](https://github.com/yuzono/anime-extensions/tree/8bbb8180517b50327ea5965c4629fe15571cbc74): reference for applying the Keiyoushi structure to anime sources. Its Komikku-specific API, Injekt and serialization pins are not copied.
 - [Aniyomi extensions-lib v17](https://github.com/aniyomiorg/extensions-lib/tree/971ce96e76202bb35432fe71f92553e3ae40d01d): the authority for video interfaces, manifest metadata and runtime dependencies.
 - [Aniyomi host](https://github.com/aniyomiorg/aniyomi/tree/97414446b8a95994c72dd33c41c971a89d4d25b8): API 17 loading and playback behavior.
 
-The manga-only KSP annotations and JAR distribution are not copied: the current
-Aniyomi host consumes APK repositories. API stubs and host-provided dependencies
-remain `compileOnly`. Coroutines 1.10.2, serialization 1.9.0, OkHttp 5.4.0,
-jsoup 1.22.2, NanoHTTPD 2.3.1, Mihon's Injekt and Cash QuickJS match Aniyomi's runtime rather than
-the different versions in the manga host.
+### Differences from Keiyoushi
 
-NanoHTTPD is only safe to use through the API's `HttpServer`. Aniyomi's release
-build is minified without keep rules for `fi.iki.elonen`, so members the host
-does not call itself are stripped. Libraries that use NanoHTTPD directly, such
-as `lib/hls-proxy`, bundle it with `implementation`; the child-first extension
-class loader then prefers the bundled copy.
+| Keiyoushi | This repository |
+| --------- | --------------- |
+| `HttpSource`, `SourceFactory`, `ConfigurableSource` | `AnimeHttpSource`, `AnimeSourceFactory`, `ConfigurableAnimeSource` in the KSP processor and `KeiSource` |
+| `tachiyomix.*` manifest metadata, `Tachiyomi:` label | `aniyomix.*` metadata (plus `aniyomix.torrent`), `Aniyomi:` label, `tachiyomi.animeextension.*` class/NSFW keys |
+| `libVersion` 1.4/1.6, required | `libVersion` 17, the default |
+| Deeplinks open `eu.kanade.tachiyomi.SEARCH` | `eu.kanade.tachiyomi.ANIMESEARCH` |
+| Signed JAR distribution and protobuf repo index | Not ported: Aniyomi installs APKs and reads the JSON index. Source info is packaged as `assets/extension-sources.json` in the APK. |
+| `KeiSource` filter cache compressed with zstd-kmp | gzip: Aniyomi's minified build doesn't keep `com.squareup.zstd` |
+| Java 11 bytecode | Java 17, the bytecode level of extensions-lib v17 |
+| Library namespace `keiyoushi.lib.<module>` | Dashes removed (`keiyoushi.lib.hlsproxy`) |
+
+Host-provided dependencies stay `compileOnly` (`libs.bundles.common`).
+Coroutines 1.10.2, serialization 1.9.0, OkHttp 5.4.0, jsoup 1.22.2, NanoHTTPD 2.3.1,
+Mihon's Injekt and Cash QuickJS match Aniyomi's runtime rather than the manga host.
+
+Aniyomi's release build is minified and only keeps the public API of the packages
+listed in its R8 rules (OkHttp, okio, jsoup, kotlinx, Injekt, QuickJS…). Anything else
+the host happens to contain, such as NanoHTTPD or `com.squareup.zstd`, may have unused
+members stripped, so extensions must bundle such libraries (`implementation`) or avoid
+them. `lib/hls-proxy` bundles NanoHTTPD; the child-first extension class loader prefers
+the bundled copy.
 
 ## Build
 
@@ -32,61 +44,105 @@ Install JDK 25 and Android SDK packages `platforms;android-37.0` and
 `build-tools;37.0.0`. Set `ANDROID_HOME` (or `sdk.dir` in `local.properties`).
 
 ```sh
-./gradlew spotlessApply              # Explicitly format files
-./gradlew spotlessCheck assembleDebug
-./gradlew assembleRelease            # Unsigned locally without signingkey.jks
+./gradlew spotlessApply
+./gradlew :src:zh:xfani:assembleDebug
+./gradlew :src:zh:xfani:assembleRelease  # R8-minified, debug-signed without signingkey.jks
 python -m unittest discover -s .github/scripts/tests -p 'test_*.py'
 ```
 
-Compilation targets JVM 17 and Android 8 (API 26), matching the current Aniyomi
-host. `gradle/build-logic` contains the extension, Android library, Kotlin library,
-multisrc and formatting plugins. Configuration caching is enabled; source metadata is resolved during configuration and exposed as a cacheable task input. Builds never auto-format source files.
+As in Keiyoushi, `preBuild` runs `spotlessApply` locally and `spotlessCheck` on CI.
+Pull requests build release variants so R8 problems surface before merging.
 
-CI keeps the existing module matrix and release publication guards. Infrastructure
-changes rebuild every extension. The release signing secrets and APK package
-names remain unchanged. Publication still requires the repository signing key.
+| Path | Purpose |
+| ---- | ------- |
+| `gradle/build-logic` | `kei.plugins.extension`, `.library`, `.theme` (multisrc), `.android.base`, `.spotless` |
+| `gradle/kei.versions.toml` | SDK levels, build tools, Java level and plugin ids |
+| `gradle/libs.versions.toml` | Dependency versions and the `common` compileOnly bundle |
+| `compiler` | KSP processor generating `keiyoushi.source.Generated` |
+| `core` | `keiyoushi.*` utilities, `KeiSource`, `UrlActivity`, default icons, translations |
+| `common` | Shared empty manifest and R8 rules for every extension |
+| `lib`, `lib-multisrc` | Shared libraries and themes |
+
+CI keeps the existing module matrix and release publication guards. Changes to the
+build logic, `compiler`, `core` or `common` rebuild every extension. The release
+signing secrets and APK package names remain unchanged.
 
 ## Extension declarations
 
-Each extension uses a `build.gradle.kts`:
-
 ```kotlin
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
-    id("video-extension")
+    alias(kei.plugins.extension)
 }
 
-videoExtension {
-    name = "Example"                 // Romanized APK display name
-    sourceClass = ".Example"         // Relative class or factory name
-    versionCode = 1                  // Extension revision, 1..999
-    contentWarning = 0               // 0 safe, 1 mixed, 2 NSFW
-    torrent = false
-    // theme = "<theme>"             // Optional lib-multisrc theme
-    // baseUrl = "https://example.com" // Optional deep-link placeholders
+keiyoushi {
+    name = "Example"                    // Romanized APK display name
+    versionCode = 1                     // Extension revision, 1..999
+    contentWarning = ContentWarning.SAFE // SAFE, MIXED or NSFW
+    // torrent = true                   // Aniyomi only
+    // theme = "<theme>"                // lib-multisrc theme
+    // pkgName = "en.oldname"           // Keep an old package name after renaming the folder
 
     source {
-        name = "Example"             // Actual source name, may be non-Latin
+        // name = "示例"                 // Defaults to the extension name
         lang = "en"
         baseUrl = "https://example.com"
-        // versionId = 1             // Same value as the Kotlin source
-        // id = 123L                 // Only when source overrides its generated ID
+        // baseUrl { mirrors("https://a.example", "https://b.example") }
+        // baseUrl { custom("https://example.com") }
+        // versionId = 2
+        // id = 123L                    // Keep an existing ID after renaming
+    }
+
+    deeplink {
+        // host("www.example.com")      // Defaults to the hosts of all source base URLs
+        path("/anime/..*")
     }
 }
 ```
 
-Declare **every factory source**. Keep names, language, base URL, versionId and
-any explicit ID synchronized with the Kotlin implementations. IDs use Aniyomi's
-MD5 algorithm and remain stable across infrastructure upgrades. Source info is
-generated into `assets/extension-sources.json` inside each signed APK. Repository
-publication reads that metadata directly; it does not load extension classes with
-the obsolete upstream Inspector or download an executable at publication time.
+The source class is annotated instead of named in the build file:
 
-`versionName` is `17.<revision>` and Android `versionCode` is
-`17000 + revision`. A theme's `extra["baseVersionCode"]` is added to its extension
-revision. API upgrades therefore advance Android's code even when the local
-revision starts over. The manifest advertises `aniyomix.extensionLib`,
-`aniyomix.name`, `aniyomix.contentWarning` and `aniyomix.torrent`; legacy class,
-feature and NSFW metadata are retained for repository consumers.
+```kotlin
+@Source
+abstract class Example : AnimeHttpSource() {
+    // name, lang, id and baseUrl are generated from the source { } blocks
+}
+```
+
+The processor generates `keiyoushi.source.Generated`, the class the manifest points
+to. One `source { }` block produces a subclass; several produce an
+`AnimeSourceFactory` with one anonymous subclass per block. A concrete `@Source`
+class taking `lang` and `id` (and optionally `name`/`baseUrl`) constructor parameters
+is instantiated directly instead. `mirrors(...)` and `custom(...)` base URLs add the
+matching preference automatically.
+
+IDs use Aniyomi's MD5 algorithm (`name.lowercase()/lang/versionId`) and must stay
+stable: keep `name`, `lang` and `versionId`, or set `id`, when renaming.
+
+The extension manifest is generated: `AndroidManifest.xml` is only needed for
+additional components. Deeplinks route through `keiyoushi.source.UrlActivity`, which
+passes the full URL as the search query; `KeiSource` resolves it with
+`getAnimeByUrl`, other sources check for URL queries in `getSearchAnime`.
+
+`versionName` is `17.<versionCode>` and Android's `versionCode` is
+`17000 + versionCode`. A theme's `baseVersionCode` is added to the extension's.
+
+Per-module R8 rules go in `proguard-rules.pro` next to `build.gradle.kts` (see
+`src/zh/anime1` for a reflective dependency).
+
+## Sources and core utilities
+
+`keiyoushi.source.KeiSource` is the suspend-first base class: it configures the
+client (compression, caching, rate limiter ordering), adds `Referer`/`Origin`, splits
+URL queries from searches, caches network-fetched filters, and requires
+`fetchAnimeEpisodeUpdate` and `getHosterList`. Existing sources extending
+`AnimeHttpSource` directly keep working and can use the utilities without it:
+
+- `keiyoushi.utils`: `parseAs`, `toJsonRequestBody`, `getPreferences`/`getPreferencesLazy`, date parsing, crypto, Next.js and React Flight parsing, GraphQL, protobuf, WebView and Turnstile helpers.
+- `keiyoushi.network`: `rateLimit`, cookies, cache control and OkHttp helpers using the current source as context.
+- `keiyoushi.zip`: remote ZIP reading.
+- Translations for generated preferences live in `core/translations/strings.json`.
 
 ## API 17 playback
 

@@ -1,12 +1,19 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
-    id("video-extension")
+    alias(kei.plugins.extension)
 }
 
-videoExtension {
+keiyoushi {
     name = "RouVideo"
-    sourceClass = ".RouVideoFactory"
     versionCode = 18
-    contentWarning = 2
+    contentWarning = ContentWarning.NSFW
+
+    deeplink {
+        path("/t/.*")
+        path("/v/.*")
+    }
+
     source {
         name = "肉視頻"
         lang = "all"

@@ -1,12 +1,5 @@
-pluginManagement {
-    repositories {
-        google()
-        mavenCentral()
-        gradlePluginPortal()
-    }
-}
-
 dependencyResolutionManagement {
+    @Suppress("UnstableApiUsage")
     repositories {
         google()
         mavenCentral()
@@ -15,6 +8,9 @@ dependencyResolutionManagement {
     versionCatalogs {
         create("libs") {
             from(files("../libs.versions.toml"))
+        }
+        create("kei") {
+            from(files("../kei.versions.toml"))
         }
     }
 }

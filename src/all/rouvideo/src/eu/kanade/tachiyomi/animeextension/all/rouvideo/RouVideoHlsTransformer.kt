@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.animeextension.all.rouvideo
 
-import eu.kanade.tachiyomi.lib.hlsproxy.HlsBodyTransformer
-import eu.kanade.tachiyomi.lib.hlsproxy.HlsResourceContext
-import eu.kanade.tachiyomi.lib.hlsproxy.HlsResourceKind
+import keiyoushi.lib.hlsproxy.HlsBodyTransformer
+import keiyoushi.lib.hlsproxy.HlsResourceContext
+import keiyoushi.lib.hlsproxy.HlsResourceKind
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.util.zip.InflaterInputStream
