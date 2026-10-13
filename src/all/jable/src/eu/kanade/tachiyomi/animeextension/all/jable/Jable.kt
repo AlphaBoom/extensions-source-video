@@ -77,16 +77,21 @@ abstract class Jable : AnimeHttpSource() {
                 },
             )
         }
-        return AnimesPage(
-            doc.select(".container .video-img-box").map {
-                SAnime.create().apply {
-                    setUrlWithoutDomain(it.select(".img-box a").attr("href"))
-                    thumbnail_url = it.select(".img-box img").attr("data-src")
-                    title = it.select(".detail .title").text()
-                }
-            },
-            true,
-        )
+        val animes = doc.select(".container .video-img-box").map {
+            SAnime.create().apply {
+                setUrlWithoutDomain(it.select(".img-box a").attr("href"))
+                thumbnail_url = it.select(".img-box img").attr("data-src")
+                title = it.select(".detail .title").text()
+            }
+        }
+        // Follow the pager when the page has one; otherwise stop at the first empty page.
+        val currentPage = doc.selectFirst(".pagination .page-item.active")
+        val hasNextPage = when {
+            animes.isEmpty() -> false
+            currentPage != null -> currentPage.nextElementSiblings().any { it.selectFirst("a.page-link") != null }
+            else -> true
+        }
+        return AnimesPage(animes, hasNextPage)
     }
 
     override fun latestUpdatesRequest(page: Int) = searchRequest("latest-updates", page, latestFilter)

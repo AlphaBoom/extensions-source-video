@@ -34,8 +34,6 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.jsoup.nodes.Element
-import java.net.URLDecoder
-import java.nio.charset.StandardCharsets
 import java.util.concurrent.ConcurrentHashMap
 
 // The domain picker comes from the mirrors in build.gradle.kts and applies after an app restart.
@@ -113,9 +111,9 @@ abstract class MissAV :
         if (document.selectFirst("div[x-data*=handleRecommendResponse]") != null) {
             val url = response.request.url
             val pathSegments = url.pathSegments
-            val queryStr = pathSegments.getOrNull(pathSegments.indexOf("search") + 1)
+            // pathSegments are already percent-decoded.
+            val query = pathSegments.getOrNull(pathSegments.indexOf("search") + 1)
                 ?: throw Exception("Failed to parse search query from URL: $url")
-            val query = URLDecoder.decode(queryStr, StandardCharsets.UTF_8.name())
             val page = url.queryParameter("page")?.toIntOrNull() ?: 1
             client.newCall(fallbackApiSearch(query, page))
                 .execute().use {
