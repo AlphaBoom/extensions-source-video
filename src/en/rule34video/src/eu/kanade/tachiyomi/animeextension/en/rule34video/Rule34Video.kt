@@ -97,7 +97,7 @@ class Rule34Video :
     private inline fun <reified R> AnimeFilterList.getUriPart() = (find { it is R } as? UriPartFilter)?.toUriPart() ?: ""
 
     override suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage {
-        if (query.startsWith("https://")) {
+        if (query.startsWith("https://") || query.startsWith("http://")) {
             // Watch URLs look like /video(s)/<id>/ with an optional /<slug>/; open the video page directly.
             val url = query.toHttpUrl()
             val segments = url.pathSegments.filter { it.isNotEmpty() }

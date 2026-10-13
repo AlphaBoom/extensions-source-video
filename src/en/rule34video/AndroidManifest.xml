@@ -29,6 +29,7 @@
                     android:host="www.rule34video.com"
                     android:pathPattern="/video/..*"
                     android:scheme="https" />
+                <data android:scheme="http" />
             </intent-filter>
         </activity>
     </application>
