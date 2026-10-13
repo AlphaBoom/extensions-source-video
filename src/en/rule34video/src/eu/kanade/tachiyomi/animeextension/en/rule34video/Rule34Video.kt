@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.ParsedAnimeHttpSource
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -97,13 +98,22 @@ class Rule34Video :
 
     override suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage {
         if (query.startsWith("https://")) {
+            // Watch URLs look like /video(s)/<id>/ with an optional /<slug>/; open the video page directly.
             val url = query.toHttpUrl()
-            if (url.host != baseUrl.toHttpUrl().host) {
+            val segments = url.pathSegments.filter { it.isNotEmpty() }
+            val isVideoUrl = url.host.removePrefix("www.") == baseUrl.toHttpUrl().host &&
+                segments.getOrNull(0) in listOf("video", "videos") &&
+                segments.getOrNull(1)?.all(Char::isDigit) == true
+            if (!isVideoUrl) {
                 throw Exception("Unsupported url")
             }
-            val slug = url.pathSegments.getOrNull(2)
-                ?: throw Exception("Unsupported url")
-            return getSearchAnime(page, "$PREFIX_SEARCH$slug", filters)
+            val path = "/" + segments.joinToString("/") + "/"
+            val document = client.newCall(GET(baseUrl + path, headers)).awaitSuccess().asJsoup()
+            val anime = animeDetailsParse(document).apply {
+                setUrlWithoutDomain(path)
+                initialized = true
+            }
+            return AnimesPage(listOf(anime), false)
         }
         return super.getSearchAnime(page, query, filters)
     }
