@@ -15,9 +15,12 @@ class SpotlessPlugin : Plugin<Project> {
 
         // Configuration should be synced with [/gradle/build-logic/build.gradle.kts]
         val ktlintVersion = libs.ktlint.bom.get().version
+        // The root project's `src/**` globs also reach extension modules' build outputs (KSP sources, generated manifests).
+        val generated = "**/build/**"
         spotless {
             kotlin {
                 target("src/**/*.kt", "*.kts")
+                targetExclude(generated)
                 ktlint(ktlintVersion)
                     .editorConfigOverride(
                         mapOf(
@@ -30,6 +33,7 @@ class SpotlessPlugin : Plugin<Project> {
 
             java {
                 target("src/**/*.java")
+                targetExclude(generated)
                 googleJavaFormat()
                 removeUnusedImports()
                 trimTrailingWhitespace()
@@ -44,6 +48,7 @@ class SpotlessPlugin : Plugin<Project> {
 
             format("xml") {
                 target("src/**/*.xml")
+                targetExclude(generated)
                 trimTrailingWhitespace()
                 endWithNewline()
             }
