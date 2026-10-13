@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.animeextension.zh.xfani
 
 import eu.kanade.tachiyomi.animesource.model.AnimeFilter
+import java.util.Calendar
 
 abstract class SelectFilter(name: String, private val options: Array<Pair<String, String>>) :
     AnimeFilter.Select<String>(name, options.map { it.first }.toTypedArray()) {
@@ -8,62 +9,69 @@ abstract class SelectFilter(name: String, private val options: Array<Pair<String
         get() = options[state].second
 }
 
-abstract class TagFilter(name: String, values: Array<String>) :
+class FormatFilter :
     SelectFilter(
-        name,
-        values.mapIndexed { index, s ->
-            if (index == 0) {
-                s to ""
-            } else {
-                s to s
-            }
-        }.toTypedArray(),
+        "形式",
+        arrayOf(
+            "全部" to "",
+            "TV 动画" to "tv",
+            "剧场版" to "movie",
+            "OVA" to "ova",
+            "OAD" to "oad",
+            "Web 动画" to "web",
+            "其他" to "other",
+        ),
     )
 
-class TypeFilter(
-    kv: Array<Pair<String, String>> = arrayOf(
-        "连载新番" to "1",
-        "完结旧番" to "2",
-        "剧场版" to "3",
-    ),
-) : SelectFilter("频道", kv)
+class StatusFilter :
+    SelectFilter(
+        "状态",
+        arrayOf(
+            "全部" to "",
+            "连载中" to "false",
+            "完结" to "true",
+        ),
+    )
 
-class ClassFilter(
-    tags: Array<String> = arrayOf(
-        "全部",
-        "搞笑",
-        "原创",
-        "轻小说改",
-        "恋爱",
-        "百合",
-        "漫改",
-    ),
-) : TagFilter("类型", tags)
-
-class VersionFilter(
-    tags: Array<String> = arrayOf(
-        "全部",
-        "BD",
-        "OVA",
-        "SP",
-        "OAD",
-    ),
-) : TagFilter("版本", tags)
-
-class LetterFilter(
-    tags: Array<String> = "ABCDEFGHIJKLMNOPQRSTUYWXYZ".map { it.toString() }.toMutableList()
-        .also {
-            it.add(0, "全部")
-            it.add("0-9")
+class YearFilter :
+    SelectFilter(
+        "年份",
+        buildList {
+            add("全部" to "")
+            val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+            for (year in currentYear downTo OLDEST_LISTED_YEAR) {
+                add("$year" to "eq.$year")
+            }
+            add("更早" to "lt.$OLDEST_LISTED_YEAR")
         }.toTypedArray(),
-) : TagFilter("字母", tags)
+    ) {
+    companion object {
+        const val OLDEST_LISTED_YEAR = 2007
+    }
+}
 
-class SortFilter(
-    kv: Array<Pair<String, String>> = arrayOf(
-        "按最新" to "time",
-        "按热门" to "hits",
-        "按评分" to "score",
-    ),
-) : SelectFilter("排序", kv)
+class TagFilter :
+    SelectFilter(
+        "标签",
+        arrayOf(
+            "全部", "漫画改", "小说改", "奇幻", "战斗", "原创", "恋爱", "校园", "日常", "百合",
+            "后宫", "科幻", "游戏改", "悬疑", "冒险", "穿越", "音乐", "运动", "机战", "喜剧",
+            "少年向", "推理", "少女向", "职场", "美食", "青年向",
+        ).mapIndexed { index, tag -> tag to if (index == 0) "" else tag }.toTypedArray(),
+    )
 
-class YearFilter(tags: Array<String>) : TagFilter("年份", tags)
+class SortFilter(state: Int = 0) :
+    SelectFilter(
+        "排序",
+        arrayOf(
+            "热度" to "view_count",
+            "最近更新" to "updated_at",
+            "评分" to "bangumi_score",
+            "最新上映" to "release_date",
+            "标题" to "title",
+        ),
+    ) {
+    init {
+        this.state = state
+    }
+}
