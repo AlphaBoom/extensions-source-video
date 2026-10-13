@@ -28,6 +28,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.Cookie
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Request
@@ -37,6 +38,8 @@ import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Semaphore
 
 enum class FilterUpdateState {
     NONE,
@@ -58,6 +61,7 @@ abstract class Hanime1 :
         network.client
             .newBuilder()
             .addInterceptor(::checkFiltersInterceptor)
+            .addInterceptor(::thumbnailInterceptor)
             .build()
 
     private val preferences: SharedPreferences by lazy {
@@ -276,6 +280,72 @@ abstract class Hanime1 :
         return chain.proceed(chain.request())
     }
 
+    // ============================== Thumbnails ==============================
+
+    /*
+     * Thumbnails are signed CDN links (`?secure=<sig>,<expiry>`) valid for at most ~30 days, and the
+     * library keeps whatever link was saved. An expired link is swapped at request time for a fresh one
+     * from the video's watch page. The image is still cached under the saved link, so each cover is
+     * refreshed at most once while it stays cached. Links found on a fetched watch page (including
+     * related videos) are kept in memory so concurrent or repeated loads don't fetch it again.
+     */
+    private val freshThumbnails = ConcurrentHashMap<String, String>()
+    private val thumbnailLocks = ConcurrentHashMap<String, Any>()
+    private val watchPageFetches = Semaphore(MAX_THUMBNAIL_REFRESHES)
+
+    private fun rememberThumbnails(text: String) {
+        if (freshThumbnails.size > MAX_REMEMBERED_THUMBNAILS) freshThumbnails.clear()
+        THUMBNAIL_URL_REGEX.findAll(text).forEach { match ->
+            val url = match.value
+            val key = match.groupValues[1] + match.groupValues[2]
+            freshThumbnails.merge(key, url) { old, new -> if (new.thumbnailExpiry() >= old.thumbnailExpiry()) new else old }
+        }
+    }
+
+    private fun String.thumbnailExpiry(): Long = substringAfterLast(',').toLongOrNull() ?: Long.MAX_VALUE
+
+    private fun HttpUrl.isThumbnailExpired(): Boolean {
+        val expiry = queryParameter("secure")?.thumbnailExpiry() ?: return true
+        return expiry * 1000 <= System.currentTimeMillis() + THUMBNAIL_EXPIRY_MARGIN
+    }
+
+    private fun thumbnailInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val match = THUMBNAIL_PATH_REGEX.matchEntire(request.url.encodedPath)
+        if (match == null || !request.url.host.endsWith(THUMBNAIL_HOST)) return chain.proceed(request)
+        val (videoId, suffix) = match.destructured
+
+        if (!request.url.isThumbnailExpired()) {
+            val response = chain.proceed(request)
+            // The site may re-sign before the expiry it advertised.
+            if (response.code != 403) return response
+            response.close()
+            freshThumbnails.remove(videoId + suffix)
+        }
+        val freshUrl = freshThumbnailUrl(videoId, suffix) ?: return chain.proceed(request)
+        return chain.proceed(request.newBuilder().url(freshUrl).build())
+    }
+
+    private fun freshThumbnailUrl(videoId: String, suffix: String): String? {
+        fun cached() = freshThumbnails[videoId + suffix]?.takeUnless { it.toHttpUrl().isThumbnailExpired() }
+
+        cached()?.let { return it }
+        synchronized(thumbnailLocks.computeIfAbsent(videoId) { Any() }) {
+            cached()?.let { return it }
+            watchPageFetches.acquire()
+            try {
+                client.newCall(GET("$baseUrl/watch?v=$videoId", headers)).execute().use {
+                    if (it.isSuccessful) rememberThumbnails(it.body.string())
+                }
+            } catch (e: Exception) {
+                Log.e(name, "Failed to refresh thumbnail of $videoId", e)
+            } finally {
+                watchPageFetches.release()
+            }
+            return cached()
+        }
+    }
+
     @OptIn(DelicateCoroutinesApi::class)
     private fun updateFilters() {
         filterUpdateState = FilterUpdateState.UPDATING
@@ -412,5 +482,13 @@ abstract class Hanime1 :
         const val PREF_KEY_CATEGORY_LIST = "PREF_KEY_CATEGORY_LIST"
 
         const val DEFAULT_QUALITY = "1080P"
+
+        private const val THUMBNAIL_HOST = "hembed.com"
+        private const val MAX_THUMBNAIL_REFRESHES = 2
+        private const val MAX_REMEMBERED_THUMBNAILS = 2000
+        private const val THUMBNAIL_EXPIRY_MARGIN = 60_000L
+        private val THUMBNAIL_PATH_REGEX = Regex("""/image/thumbnail/(\d+)([a-z]?)\.jpg""")
+        private val THUMBNAIL_URL_REGEX =
+            Regex("""https://[\w.-]*hembed\.com/image/thumbnail/(\d+)([a-z]?)\.jpg\?secure=[\w=-]+,\d+""")
     }
 }
