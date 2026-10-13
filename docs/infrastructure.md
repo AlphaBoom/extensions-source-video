@@ -17,7 +17,7 @@ Reviewed on 2026-10-13:
 The manga-only KSP annotations and JAR distribution are not copied: the current
 Aniyomi host consumes APK repositories. API stubs and host-provided dependencies
 remain `compileOnly`. Coroutines 1.10.2, serialization 1.9.0, OkHttp 5.4.0,
-jsoup 1.22.2, Mihon's Injekt and Cash QuickJS match Aniyomi's runtime rather than
+jsoup 1.22.2, NanoHTTPD 2.3.1, Mihon's Injekt and Cash QuickJS match Aniyomi's runtime rather than
 the different versions in the manga host.
 
 ## Build
@@ -101,4 +101,4 @@ feature and NSFW metadata are retained for repository consumers.
   `createHttpServer()`. Sources should implement these only where the site
   provides the required data. Existing source-specific HLS proxying is retained.
 
-Old API 14-only apps cannot load these API 17 extensions; update the host first.
+Use [official Aniyomi v0.18.2.1 or newer](https://github.com/aniyomiorg/aniyomi/releases/tag/v0.18.2.1), whose release notes explicitly add API 17 support. Old API 14-only apps cannot load these extensions; update the host first.

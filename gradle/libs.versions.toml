@@ -24,6 +24,7 @@ jspecify = { module = "org.jspecify:jspecify", version = "1.0.1" }
 okhttp = { module = "com.squareup.okhttp3:okhttp", version = "5.4.0" }
 okhttp-brotli = { module = "com.squareup.okhttp3:okhttp-brotli", version = "5.4.0" }
 okhttp-zstd = { module = "com.squareup.okhttp3:okhttp-zstd", version = "5.4.0" }
+nanohttpd = { module = "org.nanohttpd:nanohttpd", version = "2.3.1" }
 quickjs = { module = "app.cash.quickjs:quickjs-android", version = "0.9.2" }
 jsunpacker = { module = "dev.datlag.jsunpacker:jsunpacker", version = "1.0.1" }
 
@@ -36,4 +37,4 @@ kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
 
 [bundles]
-common = ["kotlin-stdlib", "injekt", "kotlin-protobuf", "kotlin-json", "kotlin-json-okio", "jsoup", "jspecify", "okhttp", "okhttp-brotli", "okhttp-zstd", "aniyomi-lib", "quickjs", "coroutines-core", "coroutines-android"]
+common = ["kotlin-stdlib", "injekt", "kotlin-protobuf", "kotlin-json", "kotlin-json-okio", "jsoup", "jspecify", "okhttp", "okhttp-brotli", "okhttp-zstd", "aniyomi-lib", "quickjs", "coroutines-core", "coroutines-android", "nanohttpd"]
