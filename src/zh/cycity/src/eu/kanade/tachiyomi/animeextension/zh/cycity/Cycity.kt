@@ -27,6 +27,7 @@ import okhttp3.Request
 import okhttp3.Response
 import java.time.OffsetDateTime
 import java.util.Calendar
+import java.util.TimeZone
 
 /**
  * 次元城动画：前端为 React SPA，数据来自同域的 JSON API（/api）。
@@ -53,7 +54,7 @@ abstract class Cycity :
             .set("Accept", "application/json")
             .set("X-App-Name", "cyc_web")
             .set("X-App-Version", "cycweb")
-            .set("X-Time-Zone", "Asia/Shanghai")
+            .set("X-Time-Zone", API_TIME_ZONE)
             .build()
     }
 
@@ -115,7 +116,7 @@ abstract class Cycity :
 
     /** 1 = 周一 … 7 = 周日 */
     private fun today(): Int {
-        val dayOfWeek = Calendar.getInstance().get(Calendar.DAY_OF_WEEK)
+        val dayOfWeek = Calendar.getInstance(TimeZone.getTimeZone(API_TIME_ZONE)).get(Calendar.DAY_OF_WEEK)
         return if (dayOfWeek == Calendar.SUNDAY) 7 else dayOfWeek - 1
     }
 
@@ -344,6 +345,9 @@ abstract class Cycity :
 
     companion object {
         private const val PAGE_SIZE = 48
+
+        // The schedule is defined in this timezone; it is also sent with every request.
+        private const val API_TIME_ZONE = "Asia/Shanghai"
         private const val SECTION_PAGE_SIZE = 100
         private const val TOKEN_REFRESH_MARGIN = 5 * 60 * 1000L
 
