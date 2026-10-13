@@ -69,6 +69,8 @@ def resolve_multisrc_libs(libs: set[str]) -> set[str]:
         return set()
 
     multisrcs = set()
+    if not Path("lib-multisrc").is_dir():
+        return multisrcs
     for multisrc in Path("lib-multisrc").iterdir():
         if not multisrc.is_dir():
             continue

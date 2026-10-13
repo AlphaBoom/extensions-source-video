@@ -260,35 +260,18 @@ With the example used above, the version would be `17.1`.
 
 Extensions rely on [extensions-lib](https://github.com/aniyomiorg/extensions-lib), which provides some interfaces and stubs from the [app](https://github.com/aniyomiorg/aniyomi) for compilation purposes. The actual implementations can be found [here](https://github.com/aniyomiorg/aniyomi/tree/master/app/src/main/java/eu/kanade/tachiyomi/animesource). Referencing the actual implementation will help with understanding extensions' call flow.
 
-#### CryptoAES library
+#### Shared libraries
 
-The [`cryptoaes`](https://github.com/aniyomiorg/aniyomi-extensions/tree/master/lib/cryptoaes) provides utilities for decrypting AES-encrypted data, like data encrypted with AES+EvpKDF (The key-derivation algorithm used by the [cryptojs](https://cryptojs.gitbook.io/docs/) library). It also includes some utilities to decrypt strings in the [jsfuck](https://jsfuck.com/) format.
+Reusable code lives in `lib/<name>` and is added with `implementation(project(":lib:<name>"))`:
 
-```kotlin
-dependencies {
-    implementation(project(":lib:cryptoaes"))
-}
-```
+| Library | Purpose |
+| ------- | ------- |
+| `playlist-utils` | Parses HLS/DASH playlists into `Video`s with resolution, bitrate and tracks. |
+| `hls-proxy` | Local HLS proxy for streams that need playlist/segment rewriting or authenticated requests. |
+| `i18n` | Loads translated strings for multi-language extensions. |
+| `bangumi-scraper` | Fetches anime metadata from Bangumi. |
 
-#### Unpacker library
-
-The [`unpacker`](https://github.com/aniyomiorg/aniyomi-extensions/tree/master/lib/unpacker) library provides a deobfuscator(unpacker) for javascript code obfuscated with the [jspacker](http://dean.edwards.name/packer/) algorithm.
-
-```kotlin
-dependencies {
-    implementation(project(":lib:unpacker"))
-}
-```
-
-#### Synchrony library
-
-[`synchrony`](https://github.com/aniyomiorg/aniyomi-extensions/tree/master/lib/synchrony) is a library that bundles and runs the [synchrony](https://github.com/relative/synchrony) deobfuscator with your extension to help when deobfuscating obfuscated javascript. Useful to get data on highly obfuscated javascript code.
-
-```kotlin
-dependencies {
-    implementation(project(":lib:synchrony"))
-}
-```
+Only add a new library when more than one extension needs it; unused libraries are removed.
 
 #### Additional dependencies
 

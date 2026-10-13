@@ -61,7 +61,7 @@ videoExtension {
     versionCode = 1                  // Extension revision, 1..999
     contentWarning = 0               // 0 safe, 1 mixed, 2 NSFW
     torrent = false
-    // theme = "animestream"         // Optional multisrc library
+    // theme = "<theme>"             // Optional lib-multisrc theme
     // baseUrl = "https://example.com" // Optional deep-link placeholders
 
     source {

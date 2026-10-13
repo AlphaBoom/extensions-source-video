@@ -46,6 +46,12 @@ class BuildMatrixTests(unittest.TestCase):
         self.assertEqual(modules, [':src:en:direct', ':src:zh:themed'])
         self.assertEqual(delete, ['en.direct', 'zh.themed'])
 
+    def test_library_change_without_multisrc_directory(self):
+        Path('lib-multisrc/theme/build.gradle.kts').unlink()
+        Path('lib-multisrc/theme').rmdir()
+        Path('lib-multisrc').rmdir()
+        self.assertEqual(self.changed('M\tlib/leaf/src/Extractor.kt'), ([':src:en:direct'], ['en.direct']))
+
     def test_included_build_and_manifest_rebuild_every_extension(self):
         for file in ['gradle/build-logic/src/main/kotlin/VideoExtensionPlugin.kt', 'common/AndroidManifest.xml']:
             with self.subTest(file=file):
