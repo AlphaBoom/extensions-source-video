@@ -25,6 +25,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.net.URLEncoder
 
 class Rule34Video :
     ParsedAnimeHttpSource(),
@@ -36,7 +37,7 @@ class Rule34Video :
 
     override val lang = "en"
 
-    override val supportsLatest = false
+    override val supportsLatest = true
 
     private val ddgInterceptor = DdosGuardInterceptor(network.client)
 
@@ -57,11 +58,11 @@ class Rule34Video :
             Log.e("Rule34Video", "Loading popular videos from uploader ID: $uploaderId, page: $page, URL: $url")
             GET(url)
         } else {
-            Log.e("Rule34Video", "Uploader filter enabled but ID is blank, loading latest updates.")
-            GET("$baseUrl/latest-updates/$page/")
+            Log.e("Rule34Video", "Uploader filter enabled but ID is blank, loading most popular.")
+            GET("$baseUrl/most-popular/$page/")
         }
     } else {
-        GET("$baseUrl/latest-updates/$page/")
+        GET("$baseUrl/most-popular/$page/")
     }
 
     // Video cards carry a video id; ad cards in the same grid do not. Uploader pages use the `ma-v` card layout.
@@ -85,13 +86,13 @@ class Rule34Video :
     override fun popularAnimeNextPageSelector() = "div.item.pager.next a"
 
     // =============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/latest-updates/$page/")
 
-    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
+    override fun latestUpdatesSelector() = popularAnimeSelector()
 
-    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
+    override fun latestUpdatesFromElement(element: Element) = popularAnimeFromElement(element)
 
-    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
+    override fun latestUpdatesNextPageSelector() = popularAnimeNextPageSelector()
 
     // =============================== Search ===============================
     private inline fun <reified R> AnimeFilterList.getUriPart() = (find { it is R } as? UriPartFilter)?.toUriPart() ?: ""
@@ -119,14 +120,8 @@ class Rule34Video :
     }
 
     override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request {
-        val orderFilter = filters.getUriPart<OrderFilter>()
+        val sortType = filters.getUriPart<OrderFilter>()
         val categoryFilter = filters.getUriPart<CategoryBy>()
-        val sortType = when (orderFilter) {
-            "latest-updates" -> "post_date"
-            "most-popular" -> "video_viewed"
-            "top-rated" -> "rating"
-            else -> ""
-        }
 
         val tagFilter = (filters.find { it is TagFilter } as? TagFilter)?.state ?: ""
 
@@ -141,7 +136,9 @@ class Rule34Video :
                 val newQuery = query.removePrefix(PREFIX_SEARCH).dropLastWhile { it.isDigit() }
                 GET("$baseUrl/search/$newQuery")
             } else {
-                GET("$baseUrl/search/${query.replace(Regex("\\s"), "-")}/?flag1=$categoryFilter&sort_by=$sortType&from_videos=$page&tag_ids=all%2C$tagSearch")
+                // Same path the site's search form builds: words joined by "-", relevance-sorted by default.
+                val slug = query.trim().split(Regex("\\s+")).joinToString("-") { it.urlEncoded() }
+                GET("$baseUrl/search/$slug/?flag1=$categoryFilter&sort_by=$sortType&from_videos=$page&tag_ids=all%2C$tagSearch")
             }
         } else {
             GET("$baseUrl/search/?flag1=$categoryFilter&sort_by=$sortType&from_videos=$page&tag_ids=all%2C$tagSearch")
@@ -358,19 +355,25 @@ class Rule34Video :
             ),
         )
 
+    // Values are the site's sort_by keys; an empty key is its default "Most relevant" order.
     private class OrderFilter :
         UriPartFilter(
             "Sort By ",
             arrayOf(
-                Pair("Latest", "latest-updates"),
-                Pair("Most Viewed", "most-popular"),
-                Pair("Top Rated", "top-rated"),
+                Pair("Most Relevant", ""),
+                Pair("Newest", "post_date"),
+                Pair("Most Viewed", "video_viewed"),
+                Pair("Top Rated", "rating"),
+                Pair("Longest", "duration"),
+                Pair("Random", "pseudo_rand"),
             ),
         )
 
     private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) : AnimeFilter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
+
+    private fun String.urlEncoded(): String = URLEncoder.encode(this, "UTF-8").replace("+", "%20")
 
     companion object {
         const val PREFIX_SEARCH = "slug:"
