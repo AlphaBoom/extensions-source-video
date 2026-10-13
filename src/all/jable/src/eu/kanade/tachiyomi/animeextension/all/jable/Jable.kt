@@ -104,7 +104,7 @@ abstract class Jable : AnimeHttpSource() {
 
     override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request = if (query.isNotEmpty()) {
         searchRequest(
-            "search/$query",
+            "search",
             page,
             AnimeFilterList(filters.list + defaultSearchFunctionFilter),
             query = query,
@@ -122,7 +122,10 @@ abstract class Jable : AnimeHttpSource() {
         query: String = "",
     ): Request {
         val urlBuilder = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegments("$path/")
+            .addPathSegments(path)
+            // The search term is one segment even if it contains a slash.
+            .apply { if (query.isNotEmpty()) addPathSegment(query) }
+            .addPathSegment("")
             .addQueryParameter("lang", lang.toRequestLang())
         if (tagsUpdated) {
             // load whole page for update filter tags info
