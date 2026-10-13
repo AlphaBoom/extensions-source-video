@@ -305,13 +305,17 @@ abstract class Hanime1 :
     private val watchPageClient by lazy { client.newBuilder().dispatcher(Dispatcher()).build() }
     private val watchPageFetches = Semaphore(MAX_THUMBNAIL_REFRESHES)
 
-    private fun rememberThumbnails(text: String) {
-        if (freshThumbnails.size > MAX_REMEMBERED_THUMBNAILS) freshThumbnails.clear()
-        THUMBNAIL_URL_REGEX.findAll(text).forEach { match ->
-            val url = match.value
-            val key = match.groupValues[1] + match.groupValues[2]
-            freshThumbnails.merge(key, url) { old, new -> if (new.thumbnailExpiry() >= old.thumbnailExpiry()) new else old }
+    /** Remembers every signed thumbnail link in [text] and returns them keyed by `<id><suffix>`. */
+    private fun rememberThumbnails(text: String): Map<String, String> {
+        val found = THUMBNAIL_URL_REGEX.findAll(text).associate { it.groupValues[1] + it.groupValues[2] to it.value }
+        // Eviction and insertion happen under one lock so a concurrent refresh can't wipe what was just added.
+        synchronized(freshThumbnails) {
+            if (freshThumbnails.size + found.size > MAX_REMEMBERED_THUMBNAILS) freshThumbnails.clear()
+            found.forEach { (key, url) ->
+                freshThumbnails.merge(key, url) { old, new -> if (new.thumbnailExpiry() >= old.thumbnailExpiry()) new else old }
+            }
         }
+        return found
     }
 
     private fun String.thumbnailExpiry(): Long = substringAfterLast(',').toLongOrNull() ?: Long.MAX_VALUE
@@ -367,11 +371,14 @@ abstract class Hanime1 :
             if (!awaitUnlessCanceled(outer) { watchPageFetches.tryAcquire(CANCEL_POLL_MILLIS, TimeUnit.MILLISECONDS) }) return null
             try {
                 if (outer.isCanceled()) return null
-                fetchWatchPage(videoId, outer)?.let(::rememberThumbnails)
+                // Use what this fetch found rather than re-reading the shared map.
+                return fetchWatchPage(videoId, outer)
+                    ?.let(::rememberThumbnails)
+                    ?.get(videoId + suffix)
+                    ?.takeUnless { it.toHttpUrl().isThumbnailExpired() }
             } finally {
                 watchPageFetches.release()
             }
-            return cached()
         } finally {
             lock.unlock()
         }
