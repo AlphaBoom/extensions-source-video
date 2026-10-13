@@ -257,7 +257,7 @@ abstract class Cycity :
         val token = authToken()
         val request = GET(
             api("v2/sections/$sectionId/play-url").build(),
-            apiHeaders.newBuilder().set("Authorization", "Bearer $token").build(),
+            authHeaders(token),
         )
         val result = client.newCall(request).await().apiResult<PlayUrl>()
         if (result.code == 401 && retry) {
@@ -270,11 +270,17 @@ abstract class Cycity :
 
     // ============================== Auth ==============================
 
+    /**
+     * The site's own web client sends `Authorization: Bearer <token>` (its request helper adds the
+     * `Bearer ` prefix when missing) for both the play-url and the refresh request.
+     */
+    private fun authHeaders(token: String): Headers = apiHeaders.newBuilder().set("Authorization", "Bearer $token").build()
+
     private suspend fun authToken(): String {
         val cached = preferences.getString(PREF_TOKEN, null)
         if (!cached.isNullOrEmpty() && !tokenExpiresSoon()) return cached
         if (!cached.isNullOrEmpty()) {
-            runCatching { requestToken(POST("$apiUrl/auth/refresh", apiHeaders.newBuilder().set("Authorization", "Bearer $cached").build())) }
+            runCatching { requestToken(POST("$apiUrl/auth/refresh", authHeaders(cached))) }
                 .getOrNull()?.let { return it }
         }
         val username = preferences.getString(PREF_USERNAME, "").orEmpty().trim()
