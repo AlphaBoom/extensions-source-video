@@ -1,10 +1,8 @@
 # Contributing
 
-> **Current build system:** use JDK 25, Android SDK 37 and `build.gradle.kts` with
-> the `video-extension` plugin. See [the current infrastructure guide](docs/infrastructure.md).
-> The older examples below describe site parsing; their Groovy build files and API 14
-> video constructors must be replaced with the API 17 forms in that guide.
-
+> Extensions target **Aniyomi extensions-lib API 17** and are built with JDK 25,
+> Android SDK 37 and Kotlin DSL (`build.gradle.kts`). See
+> [the infrastructure guide](docs/infrastructure.md) for the build plugins and API 17 details.
 
 This guide have some instructions and tips on how to create a new Aniyomi extension. Please **read it carefully** if you're a new contributor or don't have any experience on the required languages and knowledges.
 
@@ -25,9 +23,7 @@ This guide is not definitive and it's being updated over time. If you find any i
    6. [Advanced extension features](#advanced-extension-features)
 4. [Multi-source themes](#multi-source-themes)
    1. [The directory structure](#the-directory-structure)
-   2. [Development workflow](#development-workflow)
-   3. [Scaffolding overrides](#scaffolding-overrides)
-   4. [Additional Notes](#additional-notes)
+   2. [Additional Notes](#additional-notes)
 5. [Running](#running)
 6. [Debugging](#debugging)
    1. [Android Debugger](#android-debugger)
@@ -53,7 +49,8 @@ Before you start, please note that the ability to use following technologies is 
 ### Tools
 
 - [Android Studio](https://developer.android.com/studio)
-- Emulator or phone with developer options enabled and a recent version of Aniyomi installed
+- [JDK 25](https://adoptium.net/) and Android SDK packages `platforms;android-37.0` and `build-tools;37.0.0`
+- Emulator or phone (Android 8 or newer) with developer options enabled and Aniyomi v0.18.2.1 or newer installed
 - [Icon Generator](https://as280093.github.io/AndroidAssetStudio/icons-launcher.html)
 
 ### Cloning the repository
@@ -87,12 +84,11 @@ Some alternative steps can be followed to ignore "repo" branch and skip unrelate
     ```bash
     git sparse-checkout set --cone --sparse-index
     # add project folders
-    git sparse-checkout add .run buildSrc core gradle lib multisrc/src/main/java/generator
+    git sparse-checkout add common core gradle lib
     # add a single source
     git sparse-checkout add src/<lang>/<source>
     # add a multisrc theme
-    git sparse-checkout add multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/<source>
-    git sparse-checkout add multisrc/overrides/<source>
+    git sparse-checkout add lib-multisrc/<theme>
     ```
 
     To remove a source, open `.git/info/sparse-checkout` and delete the exact
@@ -113,13 +109,11 @@ Some alternative steps can be followed to ignore "repo" branch and skip unrelate
     ```bash
     /*
     !/src/*
-    !/multisrc/overrides/*
-    !/multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/*
+    !/lib-multisrc/*
     # allow a single source
     /src/<lang>/<source>
     # allow a multisrc theme
-    /multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/<source>
-    /multisrc/overrides/<source>
+    /lib-multisrc/<theme>
     # or type the source name directly
     <source>
     ```
@@ -191,8 +185,7 @@ The simplest extension structure looks like this:
 $ tree src/<lang>/<mysourcename>/
 src/<lang>/<mysourcename>/
 ├── AndroidManifest.xml (optional)
-├── build.gradle
-├── build.gradle
+├── build.gradle.kts
 ├── res
 │   ├── mipmap-hdpi
 │   │   └── ic_launcher.png
@@ -225,28 +218,41 @@ Your extension code must be placed in the package `eu.kanade.tachiyomi.animeexte
 You only need to create this file if you want to add deep linking to your extension.
 See [URL intent filter](#url-intent-filter) for more information.
 
-#### build.gradle
-Make sure that your new extension's `build.gradle` file follows the following structure:
+#### build.gradle.kts
+Make sure that your new extension's `build.gradle.kts` file follows the following structure:
 
-```groovy
-ext {
-    extName = '<My source name>'
-    extClass = '.<MySourceName>'
-    extVersionCode = 1
-    isNsfw = true
+```kotlin
+plugins {
+    id("video-extension")
 }
 
-apply from: "$rootDir/common.gradle"
+videoExtension {
+    name = "<My source name>"
+    sourceClass = ".<MySourceName>"
+    versionCode = 1
+    contentWarning = 0
+
+    source {
+        name = "<My source name>"
+        lang = "<lang>"
+        baseUrl = "https://example.com"
+    }
+}
 ```
 
 | Field | Description |
 | ----- | ----------- |
-| `extName` | The name of the extension. Should be romanized if site name is not in English.|
-| `extClass` | Points to the class that implements `AnimeSource`. You can use a relative path starting with a dot (the package name is the base path). This is used to find and instantiate the source(s). |
-| `extVersionCode` | The extension version code. This must be a positive integer and incremented with any change to the code. |
-| `isNsfw` | (Optional, defaults to `false`) Flag to indicate that a source contains NSFW content. |
+| `name` | The name of the extension. Should be romanized if site name is not in English. |
+| `sourceClass` | Points to the class that implements `AnimeSource` or `AnimeSourceFactory`, relative to the extension package (starts with a dot). |
+| `versionCode` | The extension revision (1..999). It must be incremented with any change to the code. |
+| `contentWarning` | (Optional, defaults to `0`) `0` safe, `1` mixed, `2` NSFW. Any non-zero value also sets the legacy NSFW flag. |
+| `torrent` | (Optional, defaults to `false`) Whether the extension returns torrent videos. |
+| `theme` | (Optional) Name of a `lib-multisrc` theme the extension builds upon. See [Multi-source themes](#multi-source-themes). |
+| `baseUrl` | (Optional) Fills the `SOURCEHOST`/`SOURCESCHEME` manifest placeholders for [URL intent filters](#url-intent-filter). |
+| `source { }` | One block for **every** source exposed by the class: `name`, `lang`, `baseUrl`, plus `versionId` or `id` when the Kotlin source overrides them. This metadata is packaged into the APK and published to the repository index. |
 
-The extension's version name is generated automatically by concatenating `14` and `extVersionCode`. With the example used above, the version would be `14.1`.
+The extension's version name is `17.<revision>` and the Android version code is `17000 + revision`.
+With the example used above, the version would be `17.1`.
 
 ### Core dependencies
 
@@ -258,7 +264,7 @@ Extensions rely on [extensions-lib](https://github.com/aniyomiorg/extensions-lib
 
 The [`cryptoaes`](https://github.com/aniyomiorg/aniyomi-extensions/tree/master/lib/cryptoaes) provides utilities for decrypting AES-encrypted data, like data encrypted with AES+EvpKDF (The key-derivation algorithm used by the [cryptojs](https://cryptojs.gitbook.io/docs/) library). It also includes some utilities to decrypt strings in the [jsfuck](https://jsfuck.com/) format.
 
-```groovy
+```kotlin
 dependencies {
     implementation(project(":lib:cryptoaes"))
 }
@@ -268,7 +274,7 @@ dependencies {
 
 The [`unpacker`](https://github.com/aniyomiorg/aniyomi-extensions/tree/master/lib/unpacker) library provides a deobfuscator(unpacker) for javascript code obfuscated with the [jspacker](http://dean.edwards.name/packer/) algorithm.
 
-```groovy
+```kotlin
 dependencies {
     implementation(project(":lib:unpacker"))
 }
@@ -278,7 +284,7 @@ dependencies {
 
 [`synchrony`](https://github.com/aniyomiorg/aniyomi-extensions/tree/master/lib/synchrony) is a library that bundles and runs the [synchrony](https://github.com/relative/synchrony) deobfuscator with your extension to help when deobfuscating obfuscated javascript. Useful to get data on highly obfuscated javascript code.
 
-```groovy
+```kotlin
 dependencies {
     implementation(project(":lib:synchrony"))
 }
@@ -286,7 +292,7 @@ dependencies {
 
 #### Additional dependencies
 
-If you find yourself needing additional functionality, you can add more dependencies to your `build.gradle` file.
+If you find yourself needing additional functionality, you can add more dependencies to your `build.gradle.kts` file.
 Many of [the dependencies](https://github.com/aniyomiorg/aniyomi/blob/master/app/build.gradle.kts) from the main Aniyomi app are exposed to extensions by default.
 
 > Note that several dependencies are already exposed to all extensions via Gradle version catalog.
@@ -298,7 +304,7 @@ Note that using `compileOnly` restricts you to versions that must be compatible 
 
 ### Extension main class
 
-The class which is referenced and defined by `extClass` in `build.gradle`. This class should implement either `AnimeSourceFactory` or extend one of the `AnimeSource` implementations: `AnimeHttpSource` or `ParsedAnimeHttpSource`.
+The class which is referenced and defined by `sourceClass` in `build.gradle.kts`. This class should implement either `AnimeSourceFactory` or extend one of the `AnimeSource` implementations: `AnimeHttpSource` or `ParsedAnimeHttpSource`.
 
 | Class | Description |
 | ----- | ----------- |
@@ -409,7 +415,10 @@ open class UriPartFilter(displayName: String, private val vals: Array<Pair<Strin
 
 #### Episode Videos
 
-- When user opens an episode, `fetchVideoList` will be called and it will return a list of `Video`s that are used by the player.
+- When user opens an episode, `getHosterList` (or `hosterListParse` for `AnimeHttpSource`) is called and returns a list of `Hoster`s, usually one per server.
+- Each hoster's videos are resolved lazily through `getVideoList(hoster)` / `videoListParse(response, hoster)`. Sources that resolve every video up front can return `videos.toHosterList()`.
+- Construct resolved streams with `Video(videoUrl = ..., videoTitle = ..., initialized = true)` and fill `resolution`, `bitrate`, `headers`, `subtitleTracks` and `audioTracks` when known. Use `video.copy(...)` instead of building a new `Video` when filtering tracks or rewriting URLs, so the remaining metadata is kept.
+- Override `List<Video>.sortVideos()` to apply the user's quality/server preferences.
 
 ### Misc notes
 
@@ -441,140 +450,56 @@ To get the current `id` value before the name change, you can search the source 
 override val id: Long = <the-id>
 ```
 
-Then the class name and the `name` attribute value can be changed. Also don't forget to update the extension name and class name in the individual Gradle file if it is not a multisrc extension.
+Then the class name and the `name` attribute value can be changed. Also update the matching `source { }` block in `build.gradle.kts` (set its `id` to the same old value) and, if needed, `name`/`sourceClass`.
 
-**Important:** the package name **needs** to be the same (even if it has the old name), otherwise users will not receive the extension update when it gets published in the repository. If you're changing the name of a multisrc source, you can manually set it in the generator class of the theme by using `pkgName = "oldpackagename"`.
+**Important:** the package name **needs** to be the same (even if it has the old name), otherwise users will not receive the extension update when it gets published in the repository. The package name comes from the `src/<lang>/<folder>` directory, so keep the folder name.
 
 The `id` also needs to be explicity set to the old value if you're changing the `lang` attribute.
 
 ## Multi-source themes
-The `multisrc` module houses source code for generating extensions for cases where multiple source sites use the same site generator tool(usually a CMS) for bootstraping their website and this makes them similar enough to prompt code reuse through inheritance/composition; which from now on we will use the general **theme** term to refer to.
+The `lib-multisrc` directory houses shared code for cases where multiple source sites use the same site generator tool (usually a CMS) for bootstraping their website, which makes them similar enough to prompt code reuse through inheritance; from now on we will use the general **theme** term to refer to this.
 
-This module contains the *default implementation* for each theme and definitions for each source that builds upon that default implementation and also it's overrides upon that default implementation, all of this becomes a set of source code which then is used to generate individual extensions from.
+Each theme is an Android library containing the *default implementation*. Every site using it is still a regular extension under `src/<lang>/<source>` that subclasses the theme.
 
 ### The directory structure
 ```console
-$ tree multisrc
-multisrc
+lib-multisrc/<theme>
+├── AndroidManifest.xml
 ├── build.gradle.kts
-├── overrides
-│   └── <themepkg>
-│       ├── default
-│       │   ├── additional.gradle
-│       │   └── res
-│       │       ├── mipmap-hdpi
-│       │       │   └── ic_launcher.png
-│       │       ├── mipmap-mdpi
-│       │       │   └── ic_launcher.png
-│       │       ├── mipmap-xhdpi
-│       │       │   └── ic_launcher.png
-│       │       ├── mipmap-xxhdpi
-│       │       │   └── ic_launcher.png
-│       │       ├── mipmap-xxxhdpi
-│       │       │   └── ic_launcher.png
-│       │       └── web_hi_res_512.png
-│       └── <sourcepkg>
-│           ├── additional.gradle
-│           ├── AndroidManifest.xml
-│           ├── res
-│           │   ├── mipmap-hdpi
-│           │   │   └── ic_launcher.png
-│           │   ├── mipmap-mdpi
-│           │   │   └── ic_launcher.png
-│           │   ├── mipmap-xhdpi
-│           │   │   └── ic_launcher.png
-│           │   ├── mipmap-xxhdpi
-│           │   │   └── ic_launcher.png
-│           │   ├── mipmap-xxxhdpi
-│           │   │   └── ic_launcher.png
-│           │   └── web_hi_res_512.png
-│           └── src
-│               └── <SourceName>.kt
+├── res (optional, default icons)
 └── src
-    └── main
-        ├── AndroidManifest.xml
-        └── java
-            ├── eu
-            │   └── kanade
-            │       └── tachiyomi
-            │           └── multisrc
-            │               └── <themepkg>
-            │                   ├── <ThemeName>Generator.kt
-            │                   └── <ThemeName>.kt
-            └── generator
-                ├── GeneratorMain.kt
-                ├── IntelijConfigurationGeneratorMain.kt
-                └── ThemeSourceGenerator.kt
+    └── eu/kanade/tachiyomi/multisrc/<theme>
+        └── <Theme>.kt
 ```
 
-- `multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/<themepkg>/<Theme>.kt` defines the the theme's default implementation.
-- `multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/<theme>/<Theme>Generator.kt` defines the the theme's generator class, this is similar to a `AnimeSourceFactory` class.
-- `multisrc/overrides/<themepkg>/default/res` is the theme's default icons, if a source doesn't have overrides for `res`, then default icons will be used.
-- `multisrc/overrides/<themepkg>/default/additional.gradle` defines additional gradle code, this will be copied at the end of all generated sources from this theme.
-- `multisrc/overrides/<themepkg>/<sourcepkg>` contains overrides for a source that is defined inside the `<Theme>Generator.kt` class.
-- `multisrc/overrides/<themepkg>/<sourcepkg>/src` contains source overrides.
-- `multisrc/overrides/<themepkg>/<sourcepkg>/res` contains override for icons.
-- `multisrc/overrides/<themepkg>/<sourcepkg>/additional.gradle` defines additional gradle code, this will be copied at the end of the generated gradle file below the theme's `additional.gradle`.
-- `multisrc/overrides/<themepkg>/<sourcepkg>/AndroidManifest.xml` is copied as an override to the default `AndroidManifest.xml` generation if it exists.
+A theme's `build.gradle.kts`:
 
-> **Note**
->
-> Files ending with `Gen.kt` (i.e. `multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/<theme>/XxxGen.kt`)
-> are considered helper files and won't be copied to generated sources.
+```kotlin
+plugins {
+    id("lib-multisrc")
+}
 
-### Development workflow
-There are three steps in running and testing a theme source:
+extra["baseVersionCode"] = 1
+```
 
-1. Generate the sources
-    - **Option 1: Only generate sources from one theme**
-        - **Method 1:** Find and run `<ThemeName>Generator` run configuration form the `Run/Debug Configuration` menu.
-        - **Method 2:** Directly run `<themepkg>.<ThemeName>Generator.main` by pressing the play button in front of the method shown inside Android Studio's Code Editor to generate sources from the said theme.
-    - **Option 2: Generate sources from all themes**
-        - **Method 1:** Run `./gradlew multisrc:generateExtensions` from a terminal window to generate all sources.
-        - **Method 2:** Directly run `Generator.GeneratorMain.main` by pressing the play button in front of the method shown inside Android Studio's Code Editor to generate all sources.
-2. Sync gradle to import the new generated sources inside `generated-src`
-    - **Method 1:** Android Studio might prompt to sync the gradle. Click on `Sync Now`.
-    - **Method 2:** Manually re-sync by opening `File` -> `Sync Project with Gradle Files` or by pressing `Alt+f` then `g`.
-3. Build and test the generated Extention like normal `src` sources.
-    - It's recommended to make changes here to skip going through step 1 and 2 multiple times, and when you are done, copying the changes back to `multisrc`.
+An extension using the theme declares it in its own `build.gradle.kts`:
 
-### Scaffolding overrides
-You can use this python script to generate scaffolds for source overrides. Put it inside `multisrc/overrides/<themepkg>/` as `scaffold.py`.
-```python
-import os, sys
-from pathlib import Path
-
-theme = Path(os.getcwd()).parts[-1]
-
-print(f"Detected theme: {theme}")
-
-if len(sys.argv) < 3:
-    print("Must be called with a class name and lang, for Example 'python scaffold.py LeviatanScans en'")
-    exit(-1)
-
-source = sys.argv[1]
-package = source.lower()
-lang = sys.argv[2]
-
-print(f"working on {source} with lang {lang}")
-
-os.makedirs(f"{package}/src")
-os.makedirs(f"{package}/res")
-
-with open(f"{package}/src/{source}.kt", "w") as f:
-    f.write(f"package eu.kanade.tachiyomi.animeextension.{lang}.{package}\n\n")
+```kotlin
+videoExtension {
+    name = "<My source name>"
+    sourceClass = ".<MySourceName>"
+    theme = "<theme>"
+    versionCode = 1
+    baseUrl = "https://example.com" // only needed for deep links
+    source { ... }
+}
 ```
 
 ### Additional Notes
-- Generated sources extension version code is calculated as `baseVersionCode + overrideVersionCode + multisrcLibraryVersion`.
-    - Currently `multisrcLibraryVersion` is `0`
-    - When a new source is added, it doesn't need to set `overrideVersionCode` as it's default is `0`.
-    - For each time a source changes in a way that should the version increase, `overrideVersionCode` should be increased by one.
-    - When a theme's default implementation changes, `baseVersionCode` should be increased, the initial value should be `1`.
-    - For example, for a new theme with a new source, extention version code will be `0 + 0 + 1 = 1`.
-- `IntelijConfigurationGeneratorMainKt` should be run on creating or removing a multisrc theme.
-    - On removing a theme, you can manually remove the corresponding configuration in the `.run` folder instead.
-    - Be careful if you're using sparse checkout. If other configurations are accidentally removed, `git add` the file you want and `git restore` the others. Another choice is to allow `/multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/*` before running the generator.
+- A themed extension's revision is `baseVersionCode + versionCode`.
+    - When a theme's default implementation changes, increase its `baseVersionCode`; CI bumps every extension depending on it.
+    - When only one site changes, increase that extension's `versionCode`.
+- Resources of the extension override the theme's default icons.
 
 ## Running
 
@@ -698,7 +623,12 @@ If all went well, you should see all requests and responses made by the source i
 
 ## Building
 
-APKs can be created in Android Studio via `Build > Build Bundle(s) / APK(s) > Build APK(s)` or `Build > Generate Signed Bundle / APK`.
+APKs can be created in Android Studio via `Build > Build Bundle(s) / APK(s) > Build APK(s)`, or from the command line:
+
+```console
+$ ./gradlew spotlessApply                  # format sources (builds never reformat automatically)
+$ ./gradlew spotlessCheck :src:<lang>:<source>:assembleDebug
+```
 
 ## Submitting the changes
 
@@ -710,9 +640,11 @@ Please **do test your changes by compiling it through Android Studio** before su
 
 ### Pull Request checklist
 
-- Update `extVersionCode` value in `build.gradle` for individual extensions
-- Update `overrideVersionCode` or `baseVersionCode` as needed for all multisrc extensions
+- Update `versionCode` in `build.gradle.kts` for individual extensions
+- Update `extra["baseVersionCode"]` in a theme's `build.gradle.kts` when the theme changes
 - Reference all related issues in the PR body (e.g. "Closes #xyz")
-- Add the `isNsfw = true` flag in `build.gradle` when appropriate
+- Set `contentWarning` in `build.gradle.kts` when appropriate
+- Keep `source { }` blocks in sync with the Kotlin sources
 - Explicitly kept the `id` if a source's name or language were changed
+- Run `./gradlew spotlessCheck`
 - Test the modifications by compiling and running the extension through Android Studio
