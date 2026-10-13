@@ -30,6 +30,7 @@ import kotlinx.serialization.json.Json
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.Cookie
+import okhttp3.Dispatcher
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -297,7 +298,11 @@ abstract class Hanime1 :
      * related videos) are kept in memory so concurrent or repeated loads don't fetch it again.
      */
     private val freshThumbnails = ConcurrentHashMap<String, String>()
-    private val thumbnailLocks = ConcurrentHashMap<String, ReentrantLock>()
+    private val thumbnailLocks = Array(THUMBNAIL_LOCK_STRIPES) { ReentrantLock() }
+
+    // The cover request waits for the watch page while holding a slot of the shared dispatcher, so the
+    // nested request runs on its own dispatcher to never queue behind those slots.
+    private val watchPageClient by lazy { client.newBuilder().dispatcher(Dispatcher()).build() }
     private val watchPageFetches = Semaphore(MAX_THUMBNAIL_REFRESHES)
 
     private fun rememberThumbnails(text: String) {
@@ -355,7 +360,7 @@ abstract class Hanime1 :
         fun cached() = freshThumbnails[videoId + suffix]?.takeUnless { it.toHttpUrl().isThumbnailExpired() }
 
         cached()?.let { return it }
-        val lock = thumbnailLocks.computeIfAbsent(videoId) { ReentrantLock() }
+        val lock = thumbnailLocks[Math.floorMod(videoId.hashCode(), THUMBNAIL_LOCK_STRIPES)]
         if (!awaitUnlessCanceled(outer) { lock.tryLock(CANCEL_POLL_MILLIS, TimeUnit.MILLISECONDS) }) return null
         try {
             cached()?.let { return it }
@@ -388,7 +393,7 @@ abstract class Hanime1 :
         videoId: String,
         outer: Call,
     ): String? {
-        val call = client.newCall(GET("$baseUrl/watch?v=$videoId", headers))
+        val call = watchPageClient.newCall(GET("$baseUrl/watch?v=$videoId", headers))
         val page = CompletableFuture<String?>()
         call.enqueue(
             object : Callback {
@@ -563,6 +568,7 @@ abstract class Hanime1 :
         private const val THUMBNAIL_EXPIRY_MARGIN = 60_000L
         private const val CANCEL_POLL_MILLIS = 200L
         private const val MAX_THUMBNAIL_ATTEMPTS = 2
+        private const val THUMBNAIL_LOCK_STRIPES = 16
         private val THUMBNAIL_PATH_REGEX = Regex("""/image/thumbnail/(\d+)([a-z]?)\.jpg""")
         private val THUMBNAIL_URL_REGEX =
             Regex("""https://[\w.-]*hembed\.com/image/thumbnail/(\d+)([a-z]?)\.jpg\?secure=[\w=-]+,\d+""")
