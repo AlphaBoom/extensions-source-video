@@ -325,17 +325,25 @@ abstract class Hanime1 :
         }
         val (videoId, suffix) = match.destructured
 
+        val key = videoId + suffix
         if (!request.url.isThumbnailExpired()) {
             val response = chain.proceed(request)
             // The site may re-sign before the expiry it advertised.
             if (response.code != 403) return response
             response.close()
-            freshThumbnails.remove(videoId + suffix)
+            freshThumbnails.remove(key)
         }
-        val freshUrl = freshThumbnailUrl(videoId, suffix, chain.call())
-        if (chain.call().isCanceled()) throw IOException("Canceled")
-        if (freshUrl == null) return chain.proceed(request)
-        return chain.proceed(request.newBuilder().url(freshUrl).build())
+        // A remembered link can be re-signed early too: drop it and fetch the watch page once more.
+        repeat(MAX_THUMBNAIL_ATTEMPTS) { attempt ->
+            val freshUrl = freshThumbnailUrl(videoId, suffix, chain.call())
+            if (chain.call().isCanceled()) throw IOException("Canceled")
+            if (freshUrl == null) return chain.proceed(request)
+            val response = chain.proceed(request.newBuilder().url(freshUrl).build())
+            if (response.code != 403 || attempt == MAX_THUMBNAIL_ATTEMPTS - 1) return response
+            response.close()
+            freshThumbnails.remove(key, freshUrl)
+        }
+        error("unreachable")
     }
 
     /** Returns a valid signed link, or null if none was found or [outer] was canceled while waiting. */
@@ -554,6 +562,7 @@ abstract class Hanime1 :
         private const val MAX_REMEMBERED_THUMBNAILS = 2000
         private const val THUMBNAIL_EXPIRY_MARGIN = 60_000L
         private const val CANCEL_POLL_MILLIS = 200L
+        private const val MAX_THUMBNAIL_ATTEMPTS = 2
         private val THUMBNAIL_PATH_REGEX = Regex("""/image/thumbnail/(\d+)([a-z]?)\.jpg""")
         private val THUMBNAIL_URL_REGEX =
             Regex("""https://[\w.-]*hembed\.com/image/thumbnail/(\d+)([a-z]?)\.jpg\?secure=[\w=-]+,\d+""")
