@@ -6,12 +6,12 @@ plugins {
 
 keiyoushi {
     name = "Xfani"
-    versionCode = 10
+    versionCode = 11
     contentWarning = ContentWarning.SAFE
 
     source {
         name = "稀饭动漫"
         lang = "zh"
-        baseUrl = "https://anime.xifanacg.com"
+        baseUrl = "https://next.xifanacg.com"
     }
 }

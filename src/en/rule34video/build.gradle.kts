@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Rule34Video"
-    versionCode = 12
+    versionCode = 13
     contentWarning = ContentWarning.NSFW
 
     deeplink {

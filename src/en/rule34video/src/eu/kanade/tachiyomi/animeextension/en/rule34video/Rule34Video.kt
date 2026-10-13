@@ -33,7 +33,7 @@ import uy.kohesive.injekt.api.get
 abstract class Rule34Video :
     ParsedAnimeHttpSource(),
     ConfigurableAnimeSource {
-    override val supportsLatest = false
+    override val supportsLatest = true
 
     override val supportsRelatedAnime = false
 
@@ -61,11 +61,11 @@ abstract class Rule34Video :
             Log.e("Rule34Video", "Loading popular videos from uploader ID: $uploaderId, page: $page, URL: $url")
             GET(url)
         } else {
-            Log.e("Rule34Video", "Uploader filter enabled but ID is blank, loading latest updates.")
-            GET("$baseUrl/latest-updates/$page/")
+            Log.e("Rule34Video", "Uploader filter enabled but ID is blank, loading most popular.")
+            GET("$baseUrl/most-popular/$page/")
         }
     } else {
-        GET("$baseUrl/latest-updates/$page/")
+        GET("$baseUrl/most-popular/$page/")
     }
 
     // Video cards carry a video id; ad cards in the same grid do not. Uploader pages use the `ma-v` card layout.
@@ -92,13 +92,13 @@ abstract class Rule34Video :
     override fun popularAnimeNextPageSelector() = "div.item.pager.next a"
 
     // =============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/latest-updates/$page/")
 
-    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
+    override fun latestUpdatesSelector() = popularAnimeSelector()
 
-    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
+    override fun latestUpdatesFromElement(element: Element) = popularAnimeFromElement(element)
 
-    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
+    override fun latestUpdatesNextPageSelector() = popularAnimeNextPageSelector()
 
     // =============================== Search ===============================
     private inline fun <reified R> AnimeFilterList.getUriPart() = (find { it is R } as? UriPartFilter)?.toUriPart() ?: ""
@@ -131,39 +131,36 @@ abstract class Rule34Video :
         return super.getSearchAnime(page, query, filters)
     }
 
-    override fun searchAnimeRequest(
-        page: Int,
-        query: String,
-        filters: AnimeFilterList,
-    ): Request {
-        val orderFilter = filters.getUriPart<OrderFilter>()
+    override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request {
+        val sortType = filters.getUriPart<OrderFilter>()
         val categoryFilter = filters.getUriPart<CategoryBy>()
-        val sortType =
-            when (orderFilter) {
-                "latest-updates" -> "post_date"
-                "most-popular" -> "video_viewed"
-                "top-rated" -> "rating"
-                else -> ""
-            }
 
         val tagFilter = (filters.find { it is TagFilter } as? TagFilter)?.state ?: ""
 
-        val url = "$baseUrl/search_ajax.php?tag=${tagFilter.ifBlank { "." }}"
-        val response = client.newCall(GET(url, headers)).execute()
+        val tagUrl = "$baseUrl/search_ajax.php?tag=${tagFilter.ifBlank { "." }}"
+        val response = client.newCall(GET(tagUrl, headers)).execute()
         tagDocument = response.asJsoup()
 
         val tagSearch = filters.getUriPart<TagSearch>()
 
-        return if (query.isNotEmpty()) {
-            if (query.startsWith(PREFIX_SEARCH)) {
-                val newQuery = query.removePrefix(PREFIX_SEARCH).dropLastWhile { it.isDigit() }
-                GET("$baseUrl/search/$newQuery")
-            } else {
-                GET("$baseUrl/search/${query.replace(Regex("\\s"), "-")}/?flag1=$categoryFilter&sort_by=$sortType&from_videos=$page&tag_ids=all%2C$tagSearch")
-            }
-        } else {
-            GET("$baseUrl/search/?flag1=$categoryFilter&sort_by=$sortType&from_videos=$page&tag_ids=all%2C$tagSearch")
+        if (query.startsWith(PREFIX_SEARCH)) {
+            val newQuery = query.removePrefix(PREFIX_SEARCH).dropLastWhile { it.isDigit() }
+            return GET("$baseUrl/search/$newQuery")
         }
+
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegment("search")
+            // Same path the site's search form builds: words joined by "-", relevance-sorted by default.
+            if (query.isNotBlank()) {
+                addPathSegment(query.trim().split(Regex("\\s+")).joinToString("-"))
+            }
+            addPathSegment("")
+            addQueryParameter("flag1", categoryFilter)
+            addQueryParameter("sort_by", sortType)
+            addQueryParameter("from_videos", page.toString())
+            addQueryParameter("tag_ids", "all,$tagSearch")
+        }.build()
+        return GET(url, headers)
     }
 
     override fun searchAnimeSelector() = popularAnimeSelector()
@@ -389,13 +386,17 @@ abstract class Rule34Video :
             ),
         )
 
+    // Values are the site's sort_by keys; an empty key is its default "Most relevant" order.
     private class OrderFilter :
         UriPartFilter(
             "Sort By ",
             arrayOf(
-                Pair("Latest", "latest-updates"),
-                Pair("Most Viewed", "most-popular"),
-                Pair("Top Rated", "top-rated"),
+                Pair("Most Relevant", ""),
+                Pair("Newest", "post_date"),
+                Pair("Most Viewed", "video_viewed"),
+                Pair("Top Rated", "rating"),
+                Pair("Longest", "duration"),
+                Pair("Random", "pseudo_rand"),
             ),
         )
 
