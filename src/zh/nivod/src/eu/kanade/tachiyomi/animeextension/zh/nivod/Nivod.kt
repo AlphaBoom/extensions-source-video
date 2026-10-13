@@ -5,6 +5,8 @@ import android.content.SharedPreferences
 import eu.kanade.tachiyomi.animesource.model.AnimeFilter
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
+import eu.kanade.tachiyomi.animesource.model.Hoster
+import eu.kanade.tachiyomi.animesource.model.Hoster.Companion.toHosterList
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
@@ -12,6 +14,7 @@ import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
 import eu.kanade.tachiyomi.util.parseAs
+import keiyoushi.annotation.Source
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -24,15 +27,12 @@ import uy.kohesive.injekt.injectLazy
 import java.net.URLEncoder
 import java.util.Calendar
 
-class Nivod : AnimeHttpSource() {
-    override val baseUrl: String
-        get() = "https://www.nivod.cc"
-    override val lang: String
-        get() = "zh"
-    override val name: String
-        get() = "泥视频"
+@Source
+abstract class Nivod : AnimeHttpSource() {
     override val supportsLatest: Boolean
         get() = true
+
+    override val supportsRelatedAnime = false
 
     private val json by injectLazy<Json>()
     private val preferences: SharedPreferences by lazy {
@@ -62,58 +62,64 @@ class Nivod : AnimeHttpSource() {
         }
     }
 
-    override fun videoListRequest(episode: SEpisode): Request {
-        val doc = client.newCall(super.videoListRequest(episode)).execute().asJsoup()
-        val path = doc.selectFirst("script:containsData(xhr_playinfo)")!!.data()
-            .substringAfter("url = '").substringBefore("'")
+    override fun hosterListRequest(episode: SEpisode): Request {
+        val doc = client.newCall(super.hosterListRequest(episode)).execute().asJsoup()
+        val path =
+            doc
+                .selectFirst("script:containsData(xhr_playinfo)")!!
+                .data()
+                .substringAfter("url = '")
+                .substringBefore("'")
         return GET(baseUrl + path)
     }
 
-    override fun videoListParse(response: Response): List<Video> {
+    override fun hosterListParse(response: Response): List<Hoster> = parseVideos(response).toHosterList()
+
+    protected open fun parseVideos(response: Response): List<Video> {
         val playInfo = response.parseAs<PlayInfo>()
         return playInfo.pdatas.map {
-            Video(it.playUrl, it.from.substring(0, 2).uppercase() + "云", it.playUrl)
+            Video(videoUrl = it.playUrl, videoTitle = it.from.substring(0, 2).uppercase() + "云", initialized = true)
         }
     }
 
-    override fun latestUpdatesParse(response: Response): AnimesPage {
-        return parseAnimeList(response.asJsoup().selectFirst(".tl-layout:nth-of-type(1)")!!)
-    }
+    override fun latestUpdatesParse(response: Response): AnimesPage = parseAnimeList(response.asJsoup().selectFirst(".tl-layout:nth-of-type(1)")!!)
 
     override fun latestUpdatesRequest(page: Int): Request = popularAnimeRequest(page)
 
-    override fun popularAnimeParse(response: Response): AnimesPage {
-        return parseAnimeList(response.asJsoup().selectFirst(".tl-layout:nth-of-type(2)")!!)
-    }
+    override fun popularAnimeParse(response: Response): AnimesPage = parseAnimeList(response.asJsoup().selectFirst(".tl-layout:nth-of-type(2)")!!)
 
     override fun popularAnimeRequest(page: Int): Request = GET("$baseUrl/class.html?channel=anime")
 
-    private fun parseAnimeList(element: Element): AnimesPage {
-        return AnimesPage(
-            element.select(".qy-mod-img.vertical").map {
-                SAnime.create().apply {
-                    url = it.select("a.qy-mod-link").attr("href")
-                    title = it.select(".title-wrap .main a").text()
-                    thumbnail_url = baseUrl + it.select("picture img").attr("src")
-                }
-            },
-            false,
-        )
-    }
+    private fun parseAnimeList(element: Element): AnimesPage = AnimesPage(
+        element.select(".qy-mod-img.vertical").map {
+            SAnime.create().apply {
+                url = it.select("a.qy-mod-link").attr("href")
+                title = it.select(".title-wrap .main a").text()
+                thumbnail_url = baseUrl + it.select("picture img").attr("src")
+            }
+        },
+        false,
+    )
 
     override fun searchAnimeParse(response: Response): AnimesPage {
         val doc = response.asJsoup()
-        if (response.request.url.toString().contains("filter.html")) {
+        if (response.request.url
+                .toString()
+                .contains("filter.html")
+        ) {
             // update filter config
-            val regions = doc.select("#filter_regions .category-item").associate {
-                it.text() to it.attr("onclick").substringAfter("Click('").substringBefore("'")
-            }
-            val types = doc.select("#filter_type .category-item").associate {
-                it.text() to it.attr("onclick").substringAfter("Click('").substringBefore("'")
-            }
-            val years = doc.select("#filter_yearRanges .category-item").associate {
-                it.text() to it.attr("onclick").substringAfter("Click('").substringBefore("'")
-            }
+            val regions =
+                doc.select("#filter_regions .category-item").associate {
+                    it.text() to it.attr("onclick").substringAfter("Click('").substringBefore("'")
+                }
+            val types =
+                doc.select("#filter_type .category-item").associate {
+                    it.text() to it.attr("onclick").substringAfter("Click('").substringBefore("'")
+                }
+            val years =
+                doc.select("#filter_yearRanges .category-item").associate {
+                    it.text() to it.attr("onclick").substringAfter("Click('").substringBefore("'")
+                }
             val filterConfig = FilterConfig(regions = regions, types = types, years = years)
             val target = response.request.url.queryParameter("channel")
             when (target) {
@@ -129,7 +135,11 @@ class Nivod : AnimeHttpSource() {
                     url = it.select("a.qy-mod-link").attr("href")
                     title = it.select(".title-wrap .main a").text()
                     thumbnail_url =
-                        baseUrl + it.select("div.qy-mod-cover").attr("style").substringAfter("url(")
+                        baseUrl +
+                        it
+                            .select("div.qy-mod-cover")
+                            .attr("style")
+                            .substringAfter("url(")
                             .substringBefore(")")
                 }
             },
@@ -137,28 +147,38 @@ class Nivod : AnimeHttpSource() {
         )
     }
 
-    private fun keywordSearch(page: Int, query: String): Request {
-        return GET(
-            "https://e.kortw.cc/vodsearch/-------------.html?keyword=${
-                URLEncoder.encode(
-                    query,
-                    "UTF-8",
-                )
-            }",
-        )
-    }
+    private fun keywordSearch(
+        page: Int,
+        query: String,
+    ): Request = GET(
+        "https://e.kortw.cc/vodsearch/-------------.html?keyword=${
+            URLEncoder.encode(
+                query,
+                "UTF-8",
+            )
+        }",
+    )
 
-    override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request {
+    override fun searchAnimeRequest(
+        page: Int,
+        query: String,
+        filters: AnimeFilterList,
+    ): Request {
         if (query.isNotEmpty()) {
             return keywordSearch(page, query)
         }
         val channel = filters.filterIsInstance<ChannelFilter>().firstOrNull()?.selected ?: "anime"
-        val filterUrl = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegment("filter.html")
-            .addQueryParameter("channel", channel)
-        filters.filterIsInstance<ChannelFilterGroup>()
+        val filterUrl =
+            baseUrl
+                .toHttpUrl()
+                .newBuilder()
+                .addPathSegment("filter.html")
+                .addQueryParameter("channel", channel)
+        filters
+            .filterIsInstance<ChannelFilterGroup>()
             .firstOrNull { it.channel == channel }
-            ?.state.orEmpty()
+            ?.state
+            .orEmpty()
             .forEach {
                 if (it.selected.isNotEmpty()) {
                     filterUrl.addQueryParameter(it.key, it.selected)
@@ -167,24 +187,20 @@ class Nivod : AnimeHttpSource() {
         return GET(filterUrl.build())
     }
 
-    override fun getFilterList(): AnimeFilterList {
-        return AnimeFilterList(
-            ChannelFilter(),
-            AnimeFilter.Header("仅当前分类对应分组的筛选条件生效"),
-            generateGroupFilter(PREF_KEY_ANIME_FILTER, "anime", "动漫"),
-            generateGroupFilter(PREF_KEY_MOVIE_FILTER, "movie", "电影"),
-            generateGroupFilter(PREF_KEY_TV_FILTER, "tv", "电视剧"),
-            generateGroupFilter(PREF_KEY_SHOW_FILTER, "show", "综艺"),
-        )
-    }
+    override fun getFilterList(): AnimeFilterList = AnimeFilterList(
+        ChannelFilter(),
+        AnimeFilter.Header("仅当前分类对应分组的筛选条件生效"),
+        generateGroupFilter(PREF_KEY_ANIME_FILTER, "anime", "动漫"),
+        generateGroupFilter(PREF_KEY_MOVIE_FILTER, "movie", "电影"),
+        generateGroupFilter(PREF_KEY_TV_FILTER, "tv", "电视剧"),
+        generateGroupFilter(PREF_KEY_SHOW_FILTER, "show", "综艺"),
+    )
 
     private fun generateGroupFilter(
         key: String,
         channel: String,
         name: String,
-    ): ChannelFilterGroup {
-        return ChannelFilterGroup(channel, name, generateFilters(key))
-    }
+    ): ChannelFilterGroup = ChannelFilterGroup(channel, name, generateFilters(key))
 
     private fun generateFilters(key: String): List<QueryFilter> {
         val config = preferences.getString(key, null)
@@ -201,89 +217,98 @@ class Nivod : AnimeHttpSource() {
         }
     }
 
-    private fun saveFilterConfig(key: String, config: FilterConfig) {
+    private fun saveFilterConfig(
+        key: String,
+        config: FilterConfig,
+    ) {
         preferences.edit().putString(key, json.encodeToString(config)).apply()
     }
 
-    private fun createDefaultFilterConfig(key: String): FilterConfig {
-        return when (key) {
-            PREF_KEY_TV_FILTER -> {
-                FilterConfig(
-                    regions = mapOf(
-                        "全部地区" to "",
-                        "大陆" to "cn",
-                        "台湾" to "tw",
-                        "日本" to "jp",
-                    ),
-                    types = mapOf(
-                        "全部类型" to "",
-                        "剧情" to "ju-qing",
-                        "动作" to "dong-zuo",
-                        "历史" to "li-shi",
-                        "历险" to "mao-xian",
-                    ),
-                    years = createDefaultYearMap(),
-                )
-            }
+    private fun createDefaultFilterConfig(key: String): FilterConfig = when (key) {
+        PREF_KEY_TV_FILTER -> {
+            FilterConfig(
+                regions =
+                mapOf(
+                    "全部地区" to "",
+                    "大陆" to "cn",
+                    "台湾" to "tw",
+                    "日本" to "jp",
+                ),
+                types =
+                mapOf(
+                    "全部类型" to "",
+                    "剧情" to "ju-qing",
+                    "动作" to "dong-zuo",
+                    "历史" to "li-shi",
+                    "历险" to "mao-xian",
+                ),
+                years = createDefaultYearMap(),
+            )
+        }
 
-            PREF_KEY_MOVIE_FILTER -> {
-                FilterConfig(
-                    regions = mapOf(
-                        "全部地区" to "",
-                        "大陆" to "cn",
-                        "台湾" to "tw",
-                        "日本" to "jp",
-                    ),
-                    types = mapOf(
-                        "全部类型" to "",
-                        "冒险" to "mao-xian",
-                        "剧情" to "ju-qing",
-                        "动作" to "dong-zuo",
-                    ),
-                    years = createDefaultYearMap(),
-                )
-            }
+        PREF_KEY_MOVIE_FILTER -> {
+            FilterConfig(
+                regions =
+                mapOf(
+                    "全部地区" to "",
+                    "大陆" to "cn",
+                    "台湾" to "tw",
+                    "日本" to "jp",
+                ),
+                types =
+                mapOf(
+                    "全部类型" to "",
+                    "冒险" to "mao-xian",
+                    "剧情" to "ju-qing",
+                    "动作" to "dong-zuo",
+                ),
+                years = createDefaultYearMap(),
+            )
+        }
 
-            PREF_KEY_SHOW_FILTER -> {
-                FilterConfig(
-                    regions = mapOf(
-                        "全部地区" to "",
-                        "大陆" to "cn",
-                        "韩国" to "kr",
-                        "欧美" to "west",
-                        "其他" to "other",
-                    ),
-                    types = mapOf(
-                        "全部类型" to "",
-                        "搞笑" to "gao-xiao",
-                        "音乐" to "yin-yue",
-                        "真人秀" to "zhen-ren-xiu",
-                        "脱口秀" to "tuo-kou-xiu",
-                    ),
-                    years = createDefaultYearMap(),
-                )
-            }
+        PREF_KEY_SHOW_FILTER -> {
+            FilterConfig(
+                regions =
+                mapOf(
+                    "全部地区" to "",
+                    "大陆" to "cn",
+                    "韩国" to "kr",
+                    "欧美" to "west",
+                    "其他" to "other",
+                ),
+                types =
+                mapOf(
+                    "全部类型" to "",
+                    "搞笑" to "gao-xiao",
+                    "音乐" to "yin-yue",
+                    "真人秀" to "zhen-ren-xiu",
+                    "脱口秀" to "tuo-kou-xiu",
+                ),
+                years = createDefaultYearMap(),
+            )
+        }
 
-            else -> {
-                FilterConfig(
-                    regions = mapOf(
-                        "全部地区" to "",
-                        "大陆" to "cn",
-                        "日本" to "jp",
-                        "欧美" to "west",
-                    ),
-                    types = mapOf(
-                        "全部类型" to "",
-                        "冒险" to "mao-xian",
-                        "动画电影" to "movie",
-                        "推理" to "tui-li",
-                        "校园" to "xiao-yuan",
-                        "治愈" to "zhi-yu",
-                        "泡面" to "pao-mian",
-                    ),
-                    years = createDefaultYearMap(),
-                )
-            }
+        else -> {
+            FilterConfig(
+                regions =
+                mapOf(
+                    "全部地区" to "",
+                    "大陆" to "cn",
+                    "日本" to "jp",
+                    "欧美" to "west",
+                ),
+                types =
+                mapOf(
+                    "全部类型" to "",
+                    "冒险" to "mao-xian",
+                    "动画电影" to "movie",
+                    "推理" to "tui-li",
+                    "校园" to "xiao-yuan",
+                    "治愈" to "zhi-yu",
+                    "泡面" to "pao-mian",
+                ),
+                years = createDefaultYearMap(),
+            )
         }
     }
 

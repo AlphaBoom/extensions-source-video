@@ -1,25 +1,23 @@
-## Guide
+# Video extensions
 
-just paste this into your anime repo 
+Aniyomi-compatible anime and video extensions.
+
+Add this URL to the app's anime extension repositories:
+
+```text
+https://raw.githubusercontent.com/AlphaBoom/extensions-source-video/repo/index.min.json
 ```
-https://raw.githubusercontent.com/Kohi-den/extensions/main/index.min.json
-```
-If your interested in installing just the apks they can be found [Here](https://github.com/Kohi-den/extensions)
 
-## Support Server
+APKs and repository indexes are published on the [repo branch](https://github.com/AlphaBoom/extensions-source-video/tree/repo).
+Source code and pull requests target the `release` branch.
 
-Join the [Discord](https://discord.gg/vut4mmXQzU) for updates and announcements
+These extensions use **Aniyomi extensions-lib API 17** and require a host with
+API 17 support, such as [official Aniyomi v0.18.2.1 or newer](https://github.com/aniyomiorg/aniyomi/releases/tag/v0.18.2.1). The shared build system follows Keiyoushi and Yuzono, while video
+interfaces and runtime dependencies follow Aniyomi.
 
-and please check the discord BEFORE making an issue 
+See [the infrastructure guide](docs/infrastructure.md) for build requirements,
+source metadata, extension declarations and API 17 features, and
+[CONTRIBUTING.md](CONTRIBUTING.md) for site parsing guidance.
 
-## Contributing
-
-[Template](https://github.com/aniyomiorg/aniyomi-extensions/blob/master/CONTRIBUTING.md)
-
-## Disclaimer
-
-This project does not have any affiliation with the content providers available.
-This project is not affiliated with Aniyomi.
-Don't ask for help about these extensions at the official support means of Aniyomi.
-
-All credits to the codebase goes to the original contributors.
+This project is not affiliated with content providers or Aniyomi. Please report
+extension issues in this repository. Credits belong to the original contributors.

@@ -39,34 +39,34 @@ internal object RouVideoDto {
         val hot91: List<Video>,
     ) {
         fun toAnimePage(sort: String?): AnimesPage {
-            val videos = listOf(
-                latestVideos,
-                dailyHotCNAV,
-                dailyHotSelfie,
-                dailyHot91,
-                dailyOnlyFans,
-                dailyJV,
-                hotCNAV,
-                hotSelfie,
-                hot91,
-            ).flatten().distinctBy { it.id }.sortedWith { first, second ->
-                val count = when (sort) {
-                    SORT_VIEW_KEY -> second.viewCount.compareTo(first.viewCount)
-                    SORT_LIKE_KEY -> compareValues(second.likeCount, first.likeCount)
-                    else -> 0
+            val videos =
+                listOf(
+                    latestVideos,
+                    dailyHotCNAV,
+                    dailyHotSelfie,
+                    dailyHot91,
+                    dailyOnlyFans,
+                    dailyJV,
+                    hotCNAV,
+                    hotSelfie,
+                    hot91,
+                ).flatten().distinctBy { it.id }.sortedWith { first, second ->
+                    val count =
+                        when (sort) {
+                            SORT_VIEW_KEY -> second.viewCount.compareTo(first.viewCount)
+                            SORT_LIKE_KEY -> compareValues(second.likeCount, first.likeCount)
+                            else -> 0
+                        }
+                    count.takeIf { it != 0 } ?: second.createdAt.compareTo(first.createdAt)
                 }
-                count.takeIf { it != 0 } ?: second.createdAt.compareTo(first.createdAt)
-            }
             return videos.toAnimePage()
         }
     }
 
-    fun List<Video>.toAnimePage(): AnimesPage {
-        return AnimesPage(
-            map { video -> video.toSAnime() },
-            false,
-        )
-    }
+    fun List<Video>.toAnimePage(): AnimesPage = AnimesPage(
+        map { video -> video.toSAnime() },
+        false,
+    )
 
     @Serializable
     data class VideoDetails(
@@ -99,14 +99,16 @@ internal object RouVideoDto {
         val tagZh: List<String>? = null,
         val sources: List<Source>? = null, // not available in details
     ) {
-        private val desc = StringBuilder().apply {
-            sources?.firstOrNull()?.let { append("${resolutionDesc(it.resolution.toString())}\n") }
-            append("Duration: ${formatDuration(duration.toInt())}\n")
-            append("View: $viewCount")
-            likeCount?.let { append(" - Like: $likeCount") }
-            ref?.let { append("\nRef: $it") }
-            description?.let { append("\n\n$description") }
-        }.toString()
+        private val desc =
+            StringBuilder()
+                .apply {
+                    sources?.firstOrNull()?.let { append("${resolutionDesc(it.resolution.toString())}\n") }
+                    append("Duration: ${formatDuration(duration.toInt())}\n")
+                    append("View: $viewCount")
+                    likeCount?.let { append(" - Like: $likeCount") }
+                    ref?.let { append("\nRef: $it") }
+                    description?.let { append("\n\n$description") }
+                }.toString()
 
         private val majorCategory = tags.firstOrNull()
 
@@ -169,7 +171,7 @@ internal object RouVideoDto {
         val videoUrl: String,
     )
 
-    /* Not available in details */
+    // Not available in details
     @Serializable
     data class Source(
         val id: String? = null, // not available in relatedVideos
@@ -182,7 +184,5 @@ internal object RouVideoDto {
         SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)
     }
 
-    private fun String.toDate(): Long {
-        return runCatching { DATE_FORMATTER.parse(trim())?.time }.getOrNull() ?: 0L
-    }
+    private fun String.toDate(): Long = runCatching { DATE_FORMATTER.parse(trim())?.time }.getOrNull() ?: 0L
 }

@@ -1,7 +1,0 @@
-ext {
-    extName = 'Nivod'
-    extClass = '.Nivod'
-    extVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"

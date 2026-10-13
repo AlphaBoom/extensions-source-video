@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
 import eu.kanade.tachiyomi.animesource.model.AnimeFilter
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
+import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
@@ -20,9 +21,14 @@ import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
+import kotlinx.serialization.json.put
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -47,15 +53,14 @@ import javax.net.ssl.X509TrustManager
  * 稀饭动漫 Next：前端为 Next.js，数据来自 Supabase（api.xifanacg.com）。
  * 列表/详情/搜索走 PostgREST，选集线路取自页面 SSR 数据，播放地址由 issue-web-playback 签发。
  */
-class Xfani : AnimeHttpSource(), ConfigurableAnimeSource {
-    override val baseUrl: String
-        get() = "https://next.xifanacg.com"
-    override val lang: String
-        get() = "zh"
-    override val name: String
-        get() = "稀饭动漫"
+@Source
+abstract class Xfani :
+    AnimeHttpSource(),
+    ConfigurableAnimeSource {
     override val supportsLatest: Boolean
         get() = true
+
+    override val supportsRelatedAnime = false
 
     private val apiUrl = "https://api.xifanacg.com"
 
@@ -69,11 +74,9 @@ class Xfani : AnimeHttpSource(), ConfigurableAnimeSource {
             @SuppressLint("CustomX509TrustManager")
             object : X509TrustManager {
                 override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
-                override fun checkClientTrusted(certs: Array<X509Certificate>, authType: String) =
-                    Unit
+                override fun checkClientTrusted(certs: Array<X509Certificate>, authType: String) = Unit
 
-                override fun checkServerTrusted(certs: Array<X509Certificate>, authType: String) =
-                    Unit
+                override fun checkServerTrusted(certs: Array<X509Certificate>, authType: String) = Unit
             }
 
         val insecureSocketFactory = SSLContext.getInstance("TLSv1.2").apply {
@@ -118,27 +121,23 @@ class Xfani : AnimeHttpSource(), ConfigurableAnimeSource {
 
     // ============================== List ==============================
 
-    private fun animeTableUrl(): HttpUrl.Builder =
-        "$apiUrl/rest/v1/animes".toHttpUrl().newBuilder()
-            .addQueryParameter("select", ANIME_COLUMNS)
-            .addQueryParameter("is_published", "eq.true")
+    private fun animeTableUrl(): HttpUrl.Builder = "$apiUrl/rest/v1/animes".toHttpUrl().newBuilder()
+        .addQueryParameter("select", ANIME_COLUMNS)
+        .addQueryParameter("is_published", "eq.true")
 
-    private fun HttpUrl.Builder.page(page: Int): HttpUrl.Builder =
-        addQueryParameter("limit", "$PAGE_SIZE")
-            .addQueryParameter("offset", "${(page - 1) * PAGE_SIZE}")
+    private fun HttpUrl.Builder.page(page: Int): HttpUrl.Builder = addQueryParameter("limit", "$PAGE_SIZE")
+        .addQueryParameter("offset", "${(page - 1) * PAGE_SIZE}")
 
     private fun HttpUrl.Builder.orderBy(sort: String): HttpUrl.Builder {
         val direction = if (sort == "title") "asc" else "desc.nullslast"
         return addQueryParameter("order", "$sort.$direction,id.desc")
     }
 
-    override fun popularAnimeRequest(page: Int): Request =
-        GET(animeTableUrl().orderBy("view_count").page(page).build(), apiHeaders)
+    override fun popularAnimeRequest(page: Int): Request = GET(animeTableUrl().orderBy("view_count").page(page).build(), apiHeaders)
 
     override fun popularAnimeParse(response: Response): AnimesPage = animeTableParse(response)
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET(animeTableUrl().orderBy("updated_at").page(page).build(), apiHeaders)
+    override fun latestUpdatesRequest(page: Int): Request = GET(animeTableUrl().orderBy("updated_at").page(page).build(), apiHeaders)
 
     override fun latestUpdatesParse(response: Response): AnimesPage = animeTableParse(response)
 
@@ -232,17 +231,15 @@ class Xfani : AnimeHttpSource(), ConfigurableAnimeSource {
         return GET(url.build(), apiHeaders)
     }
 
-    override fun animeDetailsParse(response: Response): SAnime =
-        response.parseAs<List<AnimeDto>>().firstOrNull()?.toSAnime()
-            ?: throw Exception("番剧不存在或已下架")
+    override fun animeDetailsParse(response: Response): SAnime = response.parseAs<List<AnimeDto>>().firstOrNull()?.toSAnime()
+        ?: throw Exception("番剧不存在或已下架")
 
     override fun getAnimeUrl(anime: SAnime): String {
         // 旧链接在新站已失效，WebView 直接打开首页
         return if (legacyVodId(anime.url) != null) baseUrl else baseUrl + anime.url
     }
 
-    private fun String.animeId(): String =
-        ANIME_ID_REGEX.find(this)?.groupValues?.get(1) ?: throw Exception("无法识别的番剧链接：$this")
+    private fun String.animeId(): String = ANIME_ID_REGEX.find(this)?.groupValues?.get(1) ?: throw Exception("无法识别的番剧链接：$this")
 
     private suspend fun resolveAnimePath(anime: SAnime): String {
         if (legacyVodId(anime.url) == null) return "/anime/${anime.url.animeId()}"
@@ -274,8 +271,7 @@ class Xfani : AnimeHttpSource(), ConfigurableAnimeSource {
             .reversed()
     }
 
-    override fun episodeListParse(response: Response): List<SEpisode> =
-        throw UnsupportedOperationException()
+    override fun episodeListParse(response: Response): List<SEpisode> = throw UnsupportedOperationException()
 
     private fun EpisodeDto.displayName(): String {
         val number = episodeNumber?.let {
@@ -331,7 +327,7 @@ class Xfani : AnimeHttpSource(), ConfigurableAnimeSource {
 
     // ============================== Videos ==============================
 
-    override suspend fun getVideoList(episode: SEpisode): List<Video> {
+    override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
         val episodeId = EPISODE_ID_REGEX.find(episode.url)?.groupValues?.get(1)?.toLong()
             ?: throw Exception("无法识别的剧集链接，请刷新剧集列表")
         val document = client.newCall(GET(baseUrl + episode.url, headers)).awaitSuccess().asJsoup()
@@ -344,23 +340,34 @@ class Xfani : AnimeHttpSource(), ConfigurableAnimeSource {
         val firstUrl = runCatching { issuePlayback(episodeId, sources.first().id) }
         if (sources.size == 1) firstUrl.getOrThrow()
         return sources.mapIndexed { index, source ->
-            Video(
-                playbackKey(episode.url, source),
-                source.name,
-                if (index == 0) firstUrl.getOrNull() else null,
+            val videoUrl = if (index == 0) firstUrl.getOrNull() else null
+            Hoster(
+                hosterUrl = playbackKey(episode.url, source),
+                hosterName = source.name,
+                videoList = videoUrl?.let { listOf(playbackVideo(it, source.name)) },
+                lazy = videoUrl == null,
+                memo = buildJsonObject {
+                    put(MEMO_EPISODE_ID, episodeId)
+                    put(MEMO_SOURCE_ID, source.id)
+                },
             )
         }
     }
 
-    override fun videoListParse(response: Response): List<Video> =
-        throw UnsupportedOperationException()
+    override suspend fun getVideoList(hoster: Hoster): List<Video> {
+        val episodeId = hoster.memo[MEMO_EPISODE_ID]?.jsonPrimitive?.long
+        val sourceId = hoster.memo[MEMO_SOURCE_ID]?.jsonPrimitive?.int
+        if (episodeId == null || sourceId == null) throw Exception("无法识别的播放线路")
+        return listOf(playbackVideo(issuePlayback(episodeId, sourceId), hoster.hosterName))
+    }
 
-    private fun playbackKey(episodeUrl: String, source: SourceDto): String =
-        (baseUrl + episodeUrl).toHttpUrl().newBuilder()
-            .setQueryParameter("source", source.code)
-            .setQueryParameter("source_id", source.id.toString())
-            .build()
-            .toString()
+    private fun playbackVideo(url: String, title: String) = Video(videoUrl = url, videoTitle = title, initialized = true)
+
+    private fun playbackKey(episodeUrl: String, source: SourceDto): String = (baseUrl + episodeUrl).toHttpUrl().newBuilder()
+        .setQueryParameter("source", source.code)
+        .setQueryParameter("source_id", source.id.toString())
+        .build()
+        .toString()
 
     private fun playbackRequest(episodeId: Long, sourceId: Int): Request = POST(
         "$apiUrl/functions/v1/issue-web-playback",
@@ -373,16 +380,6 @@ class Xfani : AnimeHttpSource(), ConfigurableAnimeSource {
         val response = client.newCall(playbackRequest(episodeId, sourceId)).await()
         return parsePlayback(response)
     }
-
-    override fun videoUrlRequest(video: Video): Request {
-        val url = video.url.toHttpUrl()
-        val episodeId = EPISODE_ID_REGEX.find(url.encodedPath)?.groupValues?.get(1)?.toLong()
-        val sourceId = url.queryParameter("source_id")?.toIntOrNull()
-        if (episodeId == null || sourceId == null) throw Exception("无法识别的播放线路")
-        return playbackRequest(episodeId, sourceId)
-    }
-
-    override fun videoUrlParse(response: Response): String = parsePlayback(response)
 
     private fun parsePlayback(response: Response): String {
         val result = response.use {
@@ -464,6 +461,8 @@ class Xfani : AnimeHttpSource(), ConfigurableAnimeSource {
         private const val ANIME_COLUMNS =
             "id,title,title_original,aliases,cover_url,description,director,actors," +
                 "meta_tags,is_finished,release_year,bangumi_score"
+        private const val MEMO_EPISODE_ID = "episode_id"
+        private const val MEMO_SOURCE_ID = "source_id"
         private const val SOURCES_MARKER = "\"sources\":[{"
 
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()

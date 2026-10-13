@@ -1,25 +1,26 @@
 plugins {
-    id("com.android.library")
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.serialization)
+
+    alias(kei.plugins.android.base)
+    alias(kei.plugins.spotless)
 }
 
 android {
-    compileSdk = AndroidConfig.compileSdk
-    namespace = AndroidConfig.coreNamespace
+    namespace = "keiyoushi.core"
 
-    defaultConfig {
-        minSdk = AndroidConfig.minSdk
+    buildFeatures {
+        resValues = false
     }
 
-    sourceSets {
-        named("main") {
-            manifest.srcFile("AndroidManifest.xml")
-            res.setSrcDirs(listOf("res"))
-        }
+    testOptions {
+        unitTests.isReturnDefaultValues = true
     }
+}
 
-    libraryVariants.all {
-        generateBuildConfigProvider?.configure {
-            enabled = false
-        }
-    }
+dependencies {
+    compileOnly(libs.bundles.common)
+
+    testImplementation(libs.bundles.common)
+    testImplementation(libs.junit)
 }

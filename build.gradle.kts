@@ -1,21 +1,22 @@
 buildscript {
-    repositories {
-        mavenCentral()
-        google()
-        maven(url = "https://plugins.gradle.org/m2/")
-    }
     dependencies {
-        classpath(libs.gradle.agp)
-        classpath(libs.gradle.kotlin)
-        classpath(libs.gradle.kotlin.serialization)
-        classpath(libs.gradle.kotlinter)
+        classpath(libs.kotlin.gradle)
     }
 }
 
-allprojects {
-    tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-        kotlinOptions {
-            jvmTarget = JavaVersion.VERSION_1_8.toString()
+plugins {
+    alias(libs.plugins.android.application) apply false
+    alias(libs.plugins.android.library) apply false
+    alias(libs.plugins.kotlin.serialization) apply false
+    alias(kei.plugins.spotless)
+}
+
+val buildLogic: IncludedBuild = gradle.includedBuild("build-logic")
+
+tasks {
+    listOf("clean", "spotlessApply", "spotlessCheck").forEach { task ->
+        named(task) {
+            dependsOn(buildLogic.task(":$task"))
         }
     }
 }

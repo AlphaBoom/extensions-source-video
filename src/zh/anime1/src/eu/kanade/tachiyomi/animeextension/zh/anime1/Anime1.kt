@@ -10,17 +10,20 @@ import com.github.houbb.opencc4j.util.ZhTwConverterUtil
 import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
+import eu.kanade.tachiyomi.animesource.model.Hoster
+import eu.kanade.tachiyomi.animesource.model.Hoster.Companion.toHosterList
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
-import eu.kanade.tachiyomi.lib.bangumiscraper.BangumiFetchType
-import eu.kanade.tachiyomi.lib.bangumiscraper.BangumiScraper
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import eu.kanade.tachiyomi.util.parseAs
+import keiyoushi.annotation.Source
+import keiyoushi.lib.bangumiscraper.BangumiFetchType
+import keiyoushi.lib.bangumiscraper.BangumiScraper
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.contentOrNull
@@ -38,15 +41,14 @@ import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Anime1 : AnimeHttpSource(), ConfigurableAnimeSource {
-    override val baseUrl: String
-        get() = "https://anime1.me"
-    override val lang: String
-        get() = "zh-hant"
-    override val name: String
-        get() = "Anime1.me"
+@Source
+abstract class Anime1 :
+    AnimeHttpSource(),
+    ConfigurableAnimeSource {
     override val supportsLatest: Boolean
         get() = true
+
+    override val supportsRelatedAnime = false
 
     override fun headersBuilder() = super.headersBuilder().add("referer", "$baseUrl/")
 
@@ -64,17 +66,15 @@ class Anime1 : AnimeHttpSource(), ConfigurableAnimeSource {
 
     override fun animeDetailsParse(response: Response) = throw UnsupportedOperationException()
 
-    override suspend fun getAnimeDetails(anime: SAnime): SAnime {
-        return if (bangumiEnable) {
-            BangumiScraper.fetchDetail(
-                client,
-                ZhTwConverterUtil.toSimple(anime.title.removeSuffixMark()),
-                fetchType = bangumiFetchType,
-            )
-        } else {
-            anime.thumbnail_url = FIX_COVER
-            anime
-        }
+    override suspend fun getAnimeDetails(anime: SAnime): SAnime = if (bangumiEnable) {
+        BangumiScraper.fetchDetail(
+            client,
+            ZhTwConverterUtil.toSimple(anime.title.removeSuffixMark()),
+            fetchType = bangumiFetchType,
+        )
+    } else {
+        anime.thumbnail_url = FIX_COVER
+        anime
     }
 
     override fun episodeListParse(response: Response): List<SEpisode> {
@@ -82,49 +82,61 @@ class Anime1 : AnimeHttpSource(), ConfigurableAnimeSource {
         val episodes = mutableListOf<SEpisode>()
         val requestUrl = response.request.url.toString()
         while (document != null) {
-            val items = document.select("article.post").map {
-                SEpisode.create().apply {
-                    name = it.select(".entry-title").text()
-                    val url = it.selectFirst(".entry-title a")?.attr("href") ?: requestUrl
-                    setUrlWithoutDomain(url)
-                    date_upload = it.select("time.updated").attr("datetime").let { date ->
-                        runCatching { uploadDateFormat.parse(date)?.time }.getOrNull() ?: 0L
+            val items =
+                document.select("article.post").map {
+                    SEpisode.create().apply {
+                        name = it.select(".entry-title").text()
+                        val url = it.selectFirst(".entry-title a")?.attr("href") ?: requestUrl
+                        setUrlWithoutDomain(url)
+                        date_upload =
+                            it.select("time.updated").attr("datetime").let { date ->
+                                runCatching { uploadDateFormat.parse(date)?.time }.getOrNull() ?: 0L
+                            }
                     }
                 }
-            }
             episodes.addAll(items)
             val previousUrl = document.select(".nav-previous a").attr("href")
-            document = if (previousUrl.isBlank()) {
-                null
-            } else {
-                client.newCall(GET(previousUrl)).execute().asJsoup()
-            }
+            document =
+                if (previousUrl.isBlank()) {
+                    null
+                } else {
+                    client.newCall(GET(previousUrl)).execute().asJsoup()
+                }
         }
         return episodes
     }
 
-    override fun videoListParse(response: Response): List<Video> {
+    override fun hosterListParse(response: Response): List<Hoster> = parseVideos(response).toHosterList()
+
+    protected open fun parseVideos(response: Response): List<Video> {
         val document = response.asJsoup()
         val req = document.select("video").attr("data-apireq")
-        val videoResponse: VideoResponse = client.newCall(
-            POST(
-                videoApiUrl,
-                body = "d=$req".toRequestBody("application/x-www-form-urlencoded".toMediaTypeOrNull()),
-            ),
-        ).execute().parseAs()
+        val videoResponse: VideoResponse =
+            client
+                .newCall(
+                    POST(
+                        videoApiUrl,
+                        body = "d=$req".toRequestBody("application/x-www-form-urlencoded".toMediaTypeOrNull()),
+                    ),
+                ).execute()
+                .parseAs()
         return videoResponse.s.map {
             val videoUrl = "https:${it.src}"
-            val newHeaders = cookieManager.getCookie(videoUrl)?.let { cookie ->
-                headers.newBuilder().add("cookie", cookie).build()
-            }
-            Video(videoUrl, it.type, videoUrl, headers = newHeaders)
+            val newHeaders =
+                cookieManager.getCookie(videoUrl)?.let { cookie ->
+                    headers.newBuilder().add("cookie", cookie).build()
+                }
+            Video(videoUrl = videoUrl, videoTitle = it.type, headers = newHeaders, initialized = true)
         }
     }
 
     override suspend fun getLatestUpdates(page: Int): AnimesPage {
         if (!this::data.isInitialized) {
-            data = client.newCall(GET(dataUrl, headers)).awaitSuccess()
-                .parseAs()
+            data =
+                client
+                    .newCall(GET(dataUrl, headers))
+                    .awaitSuccess()
+                    .parseAs()
         }
         val startIndex = ((page - 1) * PAGE_SIZE).coerceIn(0, data.size)
         val endIndex = (startIndex + PAGE_SIZE).coerceAtMost(data.size)
@@ -143,16 +155,18 @@ class Anime1 : AnimeHttpSource(), ConfigurableAnimeSource {
                         }
                         title = doc.text()
                     }
-                    status = if (array.getContent(2)?.contains("連載中") == true) {
-                        SAnime.ONGOING
-                    } else {
-                        SAnime.COMPLETED
-                    }
-                    genre = listOfNotNull(
-                        array.getContent(3),
-                        array.getContent(4),
-                        array.getContent(5),
-                    ).joinToString()
+                    status =
+                        if (array.getContent(2)?.contains("連載中") == true) {
+                            SAnime.ONGOING
+                        } else {
+                            SAnime.COMPLETED
+                        }
+                    genre =
+                        listOfNotNull(
+                            array.getContent(3),
+                            array.getContent(4),
+                            array.getContent(5),
+                        ).joinToString()
                     thumbnail_url = FIX_COVER
                 }
             },
@@ -160,30 +174,36 @@ class Anime1 : AnimeHttpSource(), ConfigurableAnimeSource {
         )
     }
 
-    override suspend fun getPopularAnime(page: Int): AnimesPage {
-        return getLatestUpdates(page)
-    }
+    override suspend fun getPopularAnime(page: Int): AnimesPage = getLatestUpdates(page)
 
     override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
+
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
+
     override fun popularAnimeParse(response: Response) = throw UnsupportedOperationException()
+
     override fun popularAnimeRequest(page: Int) = throw UnsupportedOperationException()
 
     override fun searchAnimeParse(response: Response): AnimesPage {
         // The search result is episode
         val document = response.asJsoup()
-        val items = document.select("article.post .entry-title a").map {
-            SAnime.create().apply {
-                setUrlWithoutDomain(it.attr("href"))
-                title = it.ownText()
-                thumbnail_url = FIX_COVER
+        val items =
+            document.select("article.post .entry-title a").map {
+                SAnime.create().apply {
+                    setUrlWithoutDomain(it.attr("href"))
+                    title = it.ownText()
+                    thumbnail_url = FIX_COVER
+                }
             }
-        }
         val previous = document.select(".nav-previous")
         return AnimesPage(items, previous.isNotEmpty())
     }
 
-    override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request {
+    override fun searchAnimeRequest(
+        page: Int,
+        query: String,
+        filters: AnimeFilterList,
+    ): Request {
         val url = baseUrl.toHttpUrl().newBuilder()
         if (page > 1) {
             url.addPathSegments("page/$page")
@@ -193,31 +213,35 @@ class Anime1 : AnimeHttpSource(), ConfigurableAnimeSource {
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val bangumiScraper = CheckBoxPreference(screen.context).apply {
-            key = PREF_KEY_BANGUMI
-            title = "啟用Bangumi刮削"
-        }
-        val bangumiFetchType = ListPreference(screen.context).apply {
-            key = PREF_KEY_BANGUMI_FETCH_TYPE
-            title = "詳情拉取設置"
-            setVisible(bangumiEnable)
-            entries = arrayOf("拉取部分數據", "拉取完整數據")
-            entryValues = arrayOf(BangumiFetchType.SHORT.name, BangumiFetchType.ALL.name)
-            setDefaultValue(entryValues[0])
-            summary = when (bangumiFetchType) {
-                BangumiFetchType.SHORT -> entries[0]
-                BangumiFetchType.ALL -> entries[1]
-                else -> entries[0]
+        val bangumiScraper =
+            CheckBoxPreference(screen.context).apply {
+                key = PREF_KEY_BANGUMI
+                title = "啟用Bangumi刮削"
             }
-            setOnPreferenceChangeListener { _, value ->
-                summary = when (value) {
-                    BangumiFetchType.SHORT.name -> entries[0]
-                    BangumiFetchType.ALL.name -> entries[1]
-                    else -> entries[0]
+        val bangumiFetchType =
+            ListPreference(screen.context).apply {
+                key = PREF_KEY_BANGUMI_FETCH_TYPE
+                title = "詳情拉取設置"
+                setVisible(bangumiEnable)
+                entries = arrayOf("拉取部分數據", "拉取完整數據")
+                entryValues = arrayOf(BangumiFetchType.SHORT.name, BangumiFetchType.ALL.name)
+                setDefaultValue(entryValues[0])
+                summary =
+                    when (bangumiFetchType) {
+                        BangumiFetchType.SHORT -> entries[0]
+                        BangumiFetchType.ALL -> entries[1]
+                        else -> entries[0]
+                    }
+                setOnPreferenceChangeListener { _, value ->
+                    summary =
+                        when (value) {
+                            BangumiFetchType.SHORT.name -> entries[0]
+                            BangumiFetchType.ALL.name -> entries[1]
+                            else -> entries[0]
+                        }
+                    true
                 }
-                true
             }
-        }
         bangumiScraper.setOnPreferenceChangeListener { _, value ->
             bangumiFetchType.setVisible(value as Boolean)
             true
@@ -241,15 +265,14 @@ class Anime1 : AnimeHttpSource(), ConfigurableAnimeSource {
             }
         }
 
-    private fun JsonArray.getContent(index: Int): String? {
-        return getOrNull(index)?.jsonPrimitive?.contentOrNull
-    }
+    private fun JsonArray.getContent(index: Int): String? = getOrNull(index)?.jsonPrimitive?.contentOrNull
 
-    private fun String.removeSuffixMark(): String {
-        return removeBracket("(", ")").removeBracket("[", "]").trim()
-    }
+    private fun String.removeSuffixMark(): String = removeBracket("(", ")").removeBracket("[", "]").trim()
 
-    private fun String.removeBracket(start: String, end: String): String {
+    private fun String.removeBracket(
+        start: String,
+        end: String,
+    ): String {
         val seasonStart = indexOf(start)
         val seasonEnd = indexOf(end)
         if (seasonEnd > seasonStart) {
@@ -268,7 +291,12 @@ class Anime1 : AnimeHttpSource(), ConfigurableAnimeSource {
 }
 
 @Serializable
-data class VideoSource(val src: String, val type: String)
+data class VideoSource(
+    val src: String,
+    val type: String,
+)
 
 @Serializable
-data class VideoResponse(val s: List<VideoSource>)
+data class VideoResponse(
+    val s: List<VideoSource>,
+)

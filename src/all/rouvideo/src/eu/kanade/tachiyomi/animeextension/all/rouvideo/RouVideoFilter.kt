@@ -1,32 +1,40 @@
 package eu.kanade.tachiyomi.animeextension.all.rouvideo
 
 import eu.kanade.tachiyomi.animesource.model.AnimeFilter
-import eu.kanade.tachiyomi.lib.i18n.Intl
+import keiyoushi.lib.i18n.Intl
 
 internal object RouVideoFilter {
-
-    class CategoryFilter(intl: Intl) : UriPartFilter(
+    class CategoryFilter(
+        intl: Intl,
+    ) : UriPartFilter(
         intl["category"],
         arrayOf(
             Tag("<${intl["category"]}>", ""),
             Tag(intl["featured"], FEATURED),
             Tag(intl["other_watching"], WATCHING),
-        )
-            .plus(categories(intl))
+        ).plus(categories(intl))
             .plus(Tag(intl["all_videos"], ALL_VIDEOS)),
     )
 
-    class TagFilter(intl: Intl, tags: Tags) : UriPartFilter(
+    class TagFilter(
+        intl: Intl,
+        tags: Tags,
+    ) : UriPartFilter(
         intl["tag"],
         tags,
     )
 
-    class HotSearchFilter(intl: Intl, keywords: Set<Pair<String, String>>) : UriPartFilter(
+    class HotSearchFilter(
+        intl: Intl,
+        keywords: Set<Pair<String, String>>,
+    ) : UriPartFilter(
         intl["hot_search"],
         keywords.toTypedArray(),
     )
 
-    class SortFilter(intl: Intl) : UriPartFilter(
+    class SortFilter(
+        intl: Intl,
+    ) : UriPartFilter(
         intl["sort"],
         arrayOf(
             Pair(intl["latest_recent"], SORT_LATEST_KEY),
@@ -35,10 +43,14 @@ internal object RouVideoFilter {
         ),
     )
 
-    open class UriPartFilter(displayName: String, private val options: Tags) :
-        AnimeFilter.Select<String>(displayName, options.map { it.first }.toTypedArray()) {
+    open class UriPartFilter(
+        displayName: String,
+        private val options: Tags,
+    ) : AnimeFilter.Select<String>(displayName, options.map { it.first }.toTypedArray()) {
         fun toUriPart() = options[state].second
+
         fun isEmpty() = options[state].second == ""
+
         fun isDefault() = state == 0
     }
 

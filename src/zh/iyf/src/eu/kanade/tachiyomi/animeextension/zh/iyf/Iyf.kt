@@ -2,6 +2,8 @@ package eu.kanade.tachiyomi.animeextension.zh.iyf
 
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
+import eu.kanade.tachiyomi.animesource.model.Hoster
+import eu.kanade.tachiyomi.animesource.model.Hoster.Companion.toHosterList
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
@@ -10,6 +12,7 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.util.asJsoup
 import eu.kanade.tachiyomi.util.parseAs
+import keiyoushi.annotation.Source
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonArray
@@ -26,15 +29,12 @@ import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Iyf : AnimeHttpSource() {
-    override val baseUrl: String
-        get() = "https://www.iyf.tv"
-    override val lang: String
-        get() = "zh"
-    override val name: String
-        get() = "爱壹帆"
+@Source
+abstract class Iyf : AnimeHttpSource() {
     override val supportsLatest: Boolean
         get() = true
+
+    override val supportsRelatedAnime = false
 
     override fun headersBuilder(): Headers.Builder {
         // Force the use of desktop user agent.
@@ -56,14 +56,16 @@ class Iyf : AnimeHttpSource() {
             privateKey = pConfig["privateKey"]!!.jsonArray[0].jsonPrimitive.content,
         )
     }
-    private val popularAnimeFilterList = AnimeFilterList(
-        TypeFilter(listOf("动漫" to "0,1,6")),
-        SortFilter(listOf("人气高低" to "2")),
-    )
-    private val latestAnimeFilterList = AnimeFilterList(
-        TypeFilter(listOf("动漫" to "0,1,6")),
-        SortFilter(listOf("更新时间" to "1")),
-    )
+    private val popularAnimeFilterList =
+        AnimeFilterList(
+            TypeFilter(listOf("动漫" to "0,1,6")),
+            SortFilter(listOf("人气高低" to "2")),
+        )
+    private val latestAnimeFilterList =
+        AnimeFilterList(
+            TypeFilter(listOf("动漫" to "0,1,6")),
+            SortFilter(listOf("更新时间" to "1")),
+        )
     private val episodeDateFormat by lazy {
         SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault())
     }
@@ -74,7 +76,8 @@ class Iyf : AnimeHttpSource() {
     override fun animeDetailsRequest(anime: SAnime): Request {
         val vid = "$baseUrl${anime.url}".toHttpUrl().pathSegments.last()
         val detailUrl = "https://m10.iyf.tv/v3/video/detail".toHttpUrl().newBuilder()
-        detailUrl.addQueryParameter("cinema", "1")
+        detailUrl
+            .addQueryParameter("cinema", "1")
             .addQueryParameter("device", "1")
             .addQueryParameter("player", "CkPlayer")
             .addQueryParameter("tech", "HLS")
@@ -96,16 +99,18 @@ class Iyf : AnimeHttpSource() {
             author = detail.directors.joinToString()
             artist = detail.stars.joinToString()
             genre = detail.keyWord.split(",").joinToString()
-            status = if (detail.serialCount == 0) {
-                SAnime.COMPLETED
-            } else {
-                SAnime.ONGOING
-            }
-            description = """
+            status =
+                if (detail.serialCount == 0) {
+                    SAnime.COMPLETED
+                } else {
+                    SAnime.ONGOING
+                }
+            description =
+                """
                 添加：${detail.addDate}
                 更新：${detail.updateWeekly}
                 简介：${detail.context}
-            """.trimIndent()
+                """.trimIndent()
         }
     }
 
@@ -114,7 +119,8 @@ class Iyf : AnimeHttpSource() {
         val vid = httpUrl.pathSegments.last()
         val cid = httpUrl.fragment
         val playlistUrl = "https://m10.iyf.tv/v3/video/languagesplaylist".toHttpUrl().newBuilder()
-        playlistUrl.addQueryParameter("cinema", "1")
+        playlistUrl
+            .addQueryParameter("cinema", "1")
             .addQueryParameter("vid", vid)
             .addQueryParameter("lsk", "1")
             .addQueryParameter("taxis", "0")
@@ -126,20 +132,22 @@ class Iyf : AnimeHttpSource() {
     override fun episodeListParse(response: Response): List<SEpisode> {
         val resp = response.parseAs<CommonResponse<PlayList>>()
         val playList = resp.data.info[0].playList
-        return playList.map {
-            SEpisode.create().apply {
-                url = "/${it.key}"
-                name = it.name
-                date_upload =
-                    runCatching { episodeDateFormat.parse(it.updateDate)?.time }.getOrNull() ?: 0L
-            }
-        }.asReversed()
+        return playList
+            .map {
+                SEpisode.create().apply {
+                    url = "/${it.key}"
+                    name = it.name
+                    date_upload =
+                        runCatching { episodeDateFormat.parse(it.updateDate)?.time }.getOrNull() ?: 0L
+                }
+            }.asReversed()
     }
 
-    override fun videoListRequest(episode: SEpisode): Request {
+    override fun hosterListRequest(episode: SEpisode): Request {
         val vid = "$baseUrl${episode.url}".toHttpUrl().pathSegments.last()
         val playUrl = "https://m10.iyf.tv/v3/video/play".toHttpUrl().newBuilder()
-        playUrl.addQueryParameter("cinema", "1")
+        playUrl
+            .addQueryParameter("cinema", "1")
             .addQueryParameter("id", vid)
             .addQueryParameter("a", "0")
             .addQueryParameter("lang", "none")
@@ -151,25 +159,31 @@ class Iyf : AnimeHttpSource() {
         return GET(playUrl.build(), headers)
     }
 
-    override fun videoListParse(response: Response): List<Video> {
+    override fun hosterListParse(response: Response): List<Hoster> = parseVideos(response).toHosterList()
+
+    protected open fun parseVideos(response: Response): List<Video> {
         val resp = response.parseAs<CommonResponse<Play>>()
         val play = resp.data.info[0]
         return play.clarity.filter { it.path != null }.map {
-            val url = it.path!!.rtmp.toHttpUrl().newBuilder().removeAllQueryParameters("us").build()
-                .toString()
-            Video(url, it.title, url)
+            val url =
+                it.path!!
+                    .rtmp
+                    .toHttpUrl()
+                    .newBuilder()
+                    .removeAllQueryParameters("us")
+                    .build()
+                    .toString()
+            Video(videoUrl = url, videoTitle = it.title, initialized = true)
         }
     }
 
     override fun latestUpdatesParse(response: Response): AnimesPage = searchAnimeParse(response)
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        searchAnimeRequest(page, "", latestAnimeFilterList)
+    override fun latestUpdatesRequest(page: Int): Request = searchAnimeRequest(page, "", latestAnimeFilterList)
 
     override fun popularAnimeParse(response: Response): AnimesPage = searchAnimeParse(response)
 
-    override fun popularAnimeRequest(page: Int): Request =
-        searchAnimeRequest(page, "", popularAnimeFilterList)
+    override fun popularAnimeRequest(page: Int): Request = searchAnimeRequest(page, "", popularAnimeFilterList)
 
     override fun searchAnimeParse(response: Response): AnimesPage {
         val resp = response.parseAs<CommonResponse<SearchResult>>()
@@ -186,11 +200,15 @@ class Iyf : AnimeHttpSource() {
         )
     }
 
-    private fun keywordSearchRequest(page: Int, query: String): Request {
+    private fun keywordSearchRequest(
+        page: Int,
+        query: String,
+    ): Request {
         val searchUrlBuilder = "https://rankv21.iyf.tv/v3/list/briefsearch".toHttpUrl().newBuilder()
         searchUrlBuilder.addQueryParameter("tags", query)
         val sortFilter = searchSortFilter
-        searchUrlBuilder.addQueryParameter("orderby", sortFilter.orderBy)
+        searchUrlBuilder
+            .addQueryParameter("orderby", sortFilter.orderBy)
             .addQueryParameter("page", "$page")
             .addQueryParameter("size", "$PAGE_SIZE")
             .addQueryParameter("desc", "${sortFilter.desc}")
@@ -199,23 +217,31 @@ class Iyf : AnimeHttpSource() {
         return POST(
             searchUrl.toString(),
             headers,
-            FormBody.Builder().add("tags", query)
+            FormBody
+                .Builder()
+                .add("tags", query)
                 .addEncoded("vv", signature(searchUrl.query ?: "", pConfig))
                 .addEncoded("pub", pConfig.publicKey)
                 .build(),
         )
     }
 
-    override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request {
+    override fun searchAnimeRequest(
+        page: Int,
+        query: String,
+        filters: AnimeFilterList,
+    ): Request {
         if (query.isNotEmpty()) {
             return keywordSearchRequest(page, query)
         }
         val searchUrl = "https://m10.iyf.tv/api/list/Search".toHttpUrl().newBuilder()
-        searchUrl.addQueryParameter("cinema", "1")
+        searchUrl
+            .addQueryParameter("cinema", "1")
             .addQueryParameter("page", "$page")
             .addQueryParameter("size", "$PAGE_SIZE")
         filters.list.filterIsInstance<SortFilter>().firstOrNull()?.let {
-            searchUrl.addQueryParameter("orderby", it.orderBy)
+            searchUrl
+                .addQueryParameter("orderby", it.orderBy)
                 .addQueryParameter("desc", "${it.desc}")
         }
         filters.list.filterIsInstance<PairSelectFilter>().forEach {
@@ -223,7 +249,8 @@ class Iyf : AnimeHttpSource() {
                 searchUrl.addQueryParameter(it.key, it.selected)
             }
         }
-        searchUrl.addQueryParameter("isIndex", "-1")
+        searchUrl
+            .addQueryParameter("isIndex", "-1")
             .addQueryParameter("isfree", "-1")
         // add signature
         searchUrl.appendSignature()
@@ -236,23 +263,26 @@ class Iyf : AnimeHttpSource() {
         return this
     }
 
-    private fun signature(query: String, pConfig: PConfig): String {
+    private fun signature(
+        query: String,
+        pConfig: PConfig,
+    ): String {
         val s = "${pConfig.publicKey}&${query.lowercase()}&${pConfig.privateKey}"
-        return MessageDigest.getInstance("MD5").digest(s.toByteArray())
+        return MessageDigest
+            .getInstance("MD5")
+            .digest(s.toByteArray())
             .joinToString(separator = "") { "%02x".format(it) }
     }
 
-    override fun getFilterList(): AnimeFilterList {
-        return AnimeFilterList(
-            TypeFilter(),
-            SortFilter(),
-            RegionFilter(),
-            LangFilter(),
-            YearFilter(),
-            QualityFilter(),
-            StatusFilter(),
-        )
-    }
+    override fun getFilterList(): AnimeFilterList = AnimeFilterList(
+        TypeFilter(),
+        SortFilter(),
+        RegionFilter(),
+        LangFilter(),
+        YearFilter(),
+        QualityFilter(),
+        StatusFilter(),
+    )
 
     private class PConfig(
         val publicKey: String,

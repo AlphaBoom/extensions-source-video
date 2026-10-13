@@ -3,6 +3,7 @@ import os
 import re
 import shutil
 import subprocess
+import tomllib
 from pathlib import Path
 from zipfile import ZipFile
 
@@ -16,7 +17,10 @@ APPLICATION_ICON_320_REGEX = re.compile(
 )
 LANGUAGE_REGEX = re.compile(r"aniyomi-([^\.]+)")
 
-*_, ANDROID_BUILD_TOOLS = (Path(os.environ["ANDROID_HOME"]) / "build-tools").iterdir()
+# Same build tools version as the Gradle build and the workflows' setup-android step.
+with (Path(__file__).resolve().parents[2] / "gradle" / "kei.versions.toml").open("rb") as f:
+    BUILD_TOOLS_VERSION = tomllib.load(f)["versions"]["android-build-tools"]
+ANDROID_BUILD_TOOLS = Path(os.environ["ANDROID_HOME"]) / "build-tools" / BUILD_TOOLS_VERSION
 REPO_DIR = Path(os.getenv("REPO_DIR", "repo"))
 REPO_APK_DIR = REPO_DIR / "apk"
 REPO_ICON_DIR = REPO_DIR / "icon"
@@ -24,9 +28,6 @@ REPO_ICON_DIR = REPO_DIR / "icon"
 if REPO_ICON_DIR.exists():
     shutil.rmtree(REPO_ICON_DIR)
 REPO_ICON_DIR.mkdir(parents=True)
-
-with open("output.json", encoding="utf-8") as f:
-    inspector_data = json.load(f)
 
 index_data = []
 index_min_data = []
@@ -52,7 +53,10 @@ for apk in REPO_APK_DIR.iterdir():
         f.write(i.read())
 
     language = LANGUAGE_REGEX.search(apk.name).group(1)
-    sources = inspector_data[package_name]
+    with ZipFile(apk) as archive:
+        sources = json.loads(archive.read("assets/extension-sources.json"))
+    if not sources:
+        raise ValueError(f"No sources declared in {apk.name}")
 
     if len(sources) == 1:
         source_language = sources[0]["lang"]
