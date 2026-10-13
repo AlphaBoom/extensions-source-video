@@ -11,7 +11,6 @@ import fi.iki.elonen.NanoHTTPD.newFixedLengthResponse
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.Response as OkHttpResponse
 import java.io.ByteArrayInputStream
 import java.io.FilterInputStream
 import java.io.InputStream
@@ -19,6 +18,7 @@ import java.util.LinkedHashMap
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
+import okhttp3.Response as OkHttpResponse
 
 internal class HlsProxyServer(
     private val client: OkHttpClient,
@@ -26,23 +26,24 @@ internal class HlsProxyServer(
     private val maxSessions: Int,
     private val sessionTtlMillis: Long,
 ) : NanoHTTPD(LOOPBACK_HOST, 0) {
-
     fun createSession(
         playlistUrl: String,
         headers: Headers,
         options: HlsProxyOptions,
     ): String {
         val sessionId = UUID.randomUUID().toString()
-        val session = ProxySession(
-            id = sessionId,
-            headers = headers,
-            options = options,
-        )
-        session.resources[ENTRY_PLAYLIST_PATH] = ProxyResource(
-            url = playlistUrl,
-            kind = HlsResourceKind.PLAYLIST,
-            depth = 0,
-        )
+        val session =
+            ProxySession(
+                id = sessionId,
+                headers = headers,
+                options = options,
+            )
+        session.resources[ENTRY_PLAYLIST_PATH] =
+            ProxyResource(
+                url = playlistUrl,
+                kind = HlsResourceKind.PLAYLIST,
+                depth = 0,
+            )
 
         synchronized(sessions) {
             purgeExpiredSessions()
@@ -60,12 +61,14 @@ internal class HlsProxyServer(
         val path = httpSession.uri.substringBefore("?").trim('/')
         val sessionId = path.substringBefore("/")
         val resourcePath = path.substringAfter("/", "")
-        val proxySession = synchronized(sessions) {
-            purgeExpiredSessions()
-            sessions[sessionId]?.also { it.lastAccessMillis = System.currentTimeMillis() }
-        } ?: return errorResponse(Status.NOT_FOUND, "Not Found")
-        val resource = proxySession.resources[resourcePath]
-            ?: return errorResponse(Status.NOT_FOUND, "Not Found")
+        val proxySession =
+            synchronized(sessions) {
+                purgeExpiredSessions()
+                sessions[sessionId]?.also { it.lastAccessMillis = System.currentTimeMillis() }
+            } ?: return errorResponse(Status.NOT_FOUND, "Not Found")
+        val resource =
+            proxySession.resources[resourcePath]
+                ?: return errorResponse(Status.NOT_FOUND, "Not Found")
 
         return runCatching {
             proxy(
@@ -83,28 +86,33 @@ internal class HlsProxyServer(
         proxySession: ProxySession,
         resource: ProxyResource,
     ): Response {
-        val context = HlsResourceContext(
-            url = resource.url,
-            kind = resource.kind,
-            depth = resource.depth,
-            headers = proxySession.headers,
-        )
-        val bodyTransformers = proxySession.options.bodyTransformers
-            .filter { it.supports(context) }
-        val request = buildUpstreamRequest(
-            httpSession = httpSession,
-            proxySession = proxySession,
-            context = context,
-            forceFullResource = bodyTransformers.isNotEmpty(),
-        )
+        val context =
+            HlsResourceContext(
+                url = resource.url,
+                kind = resource.kind,
+                depth = resource.depth,
+                headers = proxySession.headers,
+            )
+        val bodyTransformers =
+            proxySession.options.bodyTransformers
+                .filter { it.supports(context) }
+        val request =
+            buildUpstreamRequest(
+                httpSession = httpSession,
+                proxySession = proxySession,
+                context = context,
+                forceFullResource = bodyTransformers.isNotEmpty(),
+            )
         val upstream = execute(request)
         val responseContext = context.copy(url = upstream.request.url.toString())
 
         if (httpSession.method == Method.HEAD) {
             if (bodyTransformers.isNotEmpty() && upstream.isSuccessful) {
                 return upstream.use {
-                    val body = it.body.bytes()
-                        .applyTransformers(responseContext, bodyTransformers)
+                    val body =
+                        it.body
+                            .bytes()
+                            .applyTransformers(responseContext, bodyTransformers)
                     transformedEmptyResponse(
                         status = it.toProxyStatus(),
                         contentType = it.contentType(responseContext, proxySession.options),
@@ -136,6 +144,7 @@ internal class HlsProxyServer(
                     transformers = bodyTransformers,
                 )
             }
+
             else -> {
                 resourceResponse(
                     upstream = upstream,
@@ -154,39 +163,39 @@ internal class HlsProxyServer(
         context: HlsResourceContext,
         forceFullResource: Boolean,
     ): Request {
-        var request = Request.Builder()
-            .url(context.url)
-            .headers(proxySession.headers)
-            .method(
-                if (httpSession.method == Method.HEAD && !forceFullResource) "HEAD" else "GET",
-                null,
-            )
-            .apply {
-                FORWARDED_REQUEST_HEADERS.forEach { name ->
-                    httpSession.headers[name.lowercase()]?.let { header(name, it) }
-                }
-            }
-            .build()
+        var request =
+            Request
+                .Builder()
+                .url(context.url)
+                .headers(proxySession.headers)
+                .method(
+                    if (httpSession.method == Method.HEAD && !forceFullResource) "HEAD" else "GET",
+                    null,
+                ).apply {
+                    FORWARDED_REQUEST_HEADERS.forEach { name ->
+                        httpSession.headers[name.lowercase()]?.let { header(name, it) }
+                    }
+                }.build()
 
         proxySession.options.requestTransformers.forEach { transformer ->
             request = transformer.transform(context, request)
         }
         if (forceFullResource) {
-            request = request.newBuilder()
-                .removeHeader("Range")
-                .removeHeader("If-Range")
-                .build()
+            request =
+                request
+                    .newBuilder()
+                    .removeHeader("Range")
+                    .removeHeader("If-Range")
+                    .build()
         }
         return request
     }
 
-    private fun execute(request: Request): OkHttpResponse {
-        return runCatching { client.newCall(request).execute() }
-            .getOrElse { primaryFailure ->
-                val fallback = fallbackClient ?: throw primaryFailure
-                fallback.newCall(request).execute()
-            }
-    }
+    private fun execute(request: Request): OkHttpResponse = runCatching { client.newCall(request).execute() }
+        .getOrElse { primaryFailure ->
+            val fallback = fallbackClient ?: throw primaryFailure
+            fallback.newCall(request).execute()
+        }
 
     private fun playlistResponse(
         upstream: OkHttpResponse,
@@ -194,37 +203,39 @@ internal class HlsProxyServer(
         resource: ProxyResource,
         context: HlsResourceContext,
         transformers: List<HlsBodyTransformer>,
-    ): Response {
-        return upstream.use {
-            var playlist = it.body.bytes()
+    ): Response = upstream.use {
+        var playlist =
+            it.body
+                .bytes()
                 .applyTransformers(context, transformers)
                 .toString(Charsets.UTF_8)
-            proxySession.options.playlistTransformers.forEach { transformer ->
-                playlist = transformer.transform(context, playlist)
-            }
-            check(playlist.trimStart().startsWith("#EXTM3U")) {
-                "Invalid HLS playlist"
-            }
+        proxySession.options.playlistTransformers.forEach { transformer ->
+            playlist = transformer.transform(context, playlist)
+        }
+        check(playlist.trimStart().startsWith("#EXTM3U")) {
+            "Invalid HLS playlist"
+        }
 
-            val rewritten = HlsPlaylistRewriter.rewrite(
+        val rewritten =
+            HlsPlaylistRewriter.rewrite(
                 playlist = playlist,
                 sourceUrl = context.url,
             ) { url, kind ->
-                val depth = if (kind == HlsResourceKind.PLAYLIST) {
-                    resource.depth + 1
-                } else {
-                    resource.depth
-                }
+                val depth =
+                    if (kind == HlsResourceKind.PLAYLIST) {
+                        resource.depth + 1
+                    } else {
+                        resource.depth
+                    }
                 registerResource(proxySession, url, kind, depth)
             }
 
-            bytesResponse(
-                status = it.toProxyStatus(),
-                contentType = HLS_MIME,
-                body = rewritten.toByteArray(),
-                upstream = it,
-            )
-        }
+        bytesResponse(
+            status = it.toProxyStatus(),
+            contentType = HLS_MIME,
+            body = rewritten.toByteArray(),
+            upstream = it,
+        )
     }
 
     private fun resourceResponse(
@@ -256,20 +267,21 @@ internal class HlsProxyServer(
     ): Response {
         val body = upstream.body
         val stream = ClosingInputStream(body.byteStream(), upstream)
-        val response = if (body.contentLength() >= 0) {
-            newFixedLengthResponse(
-                upstream.toProxyStatus(),
-                upstream.contentType(context, options),
-                stream,
-                body.contentLength(),
-            )
-        } else {
-            newChunkedResponse(
-                upstream.toProxyStatus(),
-                upstream.contentType(context, options),
-                stream,
-            )
-        }
+        val response =
+            if (body.contentLength() >= 0) {
+                newFixedLengthResponse(
+                    upstream.toProxyStatus(),
+                    upstream.contentType(context, options),
+                    stream,
+                    body.contentLength(),
+                )
+            } else {
+                newChunkedResponse(
+                    upstream.toProxyStatus(),
+                    upstream.contentType(context, options),
+                    stream,
+                )
+            }
         return response.copyHeadersFrom(upstream)
     }
 
@@ -278,15 +290,12 @@ internal class HlsProxyServer(
         contentType: String,
         body: ByteArray,
         upstream: OkHttpResponse,
-    ): Response {
-        return newFixedLengthResponse(
-            status,
-            contentType,
-            ByteArrayInputStream(body),
-            body.size.toLong(),
-        )
-            .copyHeadersFrom(upstream)
-    }
+    ): Response = newFixedLengthResponse(
+        status,
+        contentType,
+        ByteArrayInputStream(body),
+        body.size.toLong(),
+    ).copyHeadersFrom(upstream)
 
     private fun transformedBytesResponse(
         status: IStatus,
@@ -306,9 +315,10 @@ internal class HlsProxyServer(
             }
         }
 
-        val range = rangeHeader.toByteRange(body.size)
-            ?: return errorResponse(Status.RANGE_NOT_SATISFIABLE, "Range Not Satisfiable")
-                .apply { addHeader("Content-Range", "bytes */${body.size}") }
+        val range =
+            rangeHeader.toByteRange(body.size)
+                ?: return errorResponse(Status.RANGE_NOT_SATISFIABLE, "Range Not Satisfiable")
+                    .apply { addHeader("Content-Range", "bytes */${body.size}") }
         val rangedBody = body.copyOfRange(range.first, range.last + 1)
         return newFixedLengthResponse(
             Status.PARTIAL_CONTENT,
@@ -326,17 +336,15 @@ internal class HlsProxyServer(
         status: IStatus,
         contentType: String,
         contentLength: Long,
-    ): Response {
-        return newFixedLengthResponse(
-            status,
-            contentType,
-            ByteArrayInputStream(ByteArray(0)),
-            0,
-        ).apply {
-            addHeader("Accept-Ranges", "bytes")
-            addHeader("Cache-Control", "no-store")
-            addHeader("Content-Length", contentLength.toString())
-        }
+    ): Response = newFixedLengthResponse(
+        status,
+        contentType,
+        ByteArrayInputStream(ByteArray(0)),
+        0,
+    ).apply {
+        addHeader("Accept-Ranges", "bytes")
+        addHeader("Cache-Control", "no-store")
+        addHeader("Content-Length", contentLength.toString())
     }
 
     private fun emptyResponse(
@@ -344,18 +352,16 @@ internal class HlsProxyServer(
         contentType: String,
         contentLength: Long,
         upstream: OkHttpResponse,
-    ): Response {
-        return newFixedLengthResponse(
-            status,
-            contentType,
-            ByteArrayInputStream(ByteArray(0)),
-            0,
-        ).apply {
-            if (contentLength >= 0) {
-                addHeader("Content-Length", contentLength.toString())
-            }
-        }.copyHeadersFrom(upstream)
-    }
+    ): Response = newFixedLengthResponse(
+        status,
+        contentType,
+        ByteArrayInputStream(ByteArray(0)),
+        0,
+    ).apply {
+        if (contentLength >= 0) {
+            addHeader("Content-Length", contentLength.toString())
+        }
+    }.copyHeadersFrom(upstream)
 
     private fun registerResource(
         session: ProxySession,
@@ -364,20 +370,22 @@ internal class HlsProxyServer(
         depth: Int,
     ): String {
         val key = ProxyResourceKey(url, kind, depth)
-        val path = synchronized(session) {
-            session.resourcePaths[key] ?: run {
-                val newPath = "${session.counter.incrementAndGet()}.${kind.extension}"
-                session.resources[newPath] = ProxyResource(url, kind, depth)
-                session.resourcePaths[key] = newPath
-                newPath
+        val path =
+            synchronized(session) {
+                session.resourcePaths[key] ?: run {
+                    val newPath = "${session.counter.incrementAndGet()}.${kind.extension}"
+                    session.resources[newPath] = ProxyResource(url, kind, depth)
+                    session.resourcePaths[key] = newPath
+                    newPath
+                }
             }
-        }
         return localUrl(session.id, path)
     }
 
-    private fun localUrl(sessionId: String, path: String): String {
-        return "http://$LOOPBACK_HOST:$listeningPort/$sessionId/$path"
-    }
+    private fun localUrl(
+        sessionId: String,
+        path: String,
+    ): String = "http://$LOOPBACK_HOST:$listeningPort/$sessionId/$path"
 
     private fun OkHttpResponse.contentType(
         context: HlsResourceContext,
@@ -385,10 +393,11 @@ internal class HlsProxyServer(
     ): String {
         if (context.kind == HlsResourceKind.PLAYLIST) return HLS_MIME
 
-        val upstreamType = header("Content-Type")
-            ?.substringBefore(";")
-            ?.trim()
-            ?.takeIf(String::isNotEmpty)
+        val upstreamType =
+            header("Content-Type")
+                ?.substringBefore(";")
+                ?.trim()
+                ?.takeIf(String::isNotEmpty)
         if (!options.normalizeMimeTypes) {
             return upstreamType ?: DEFAULT_BINARY_MIME
         }
@@ -397,17 +406,22 @@ internal class HlsProxyServer(
             HlsResourceKind.SEGMENT -> {
                 if (upstreamType == null || upstreamType.startsWith("image/")) MPEG_TS_MIME else upstreamType
             }
+
             HlsResourceKind.INITIALIZATION -> {
                 if (upstreamType == null || upstreamType.startsWith("image/")) MP4_MIME else upstreamType
             }
-            HlsResourceKind.KEY -> DEFAULT_BINARY_MIME
-            else -> upstreamType ?: DEFAULT_BINARY_MIME
+
+            HlsResourceKind.KEY -> {
+                DEFAULT_BINARY_MIME
+            }
+
+            else -> {
+                upstreamType ?: DEFAULT_BINARY_MIME
+            }
         }
     }
 
-    private fun OkHttpResponse.toProxyStatus(): IStatus {
-        return Status.lookup(code) ?: HttpStatus(code, message.ifBlank { "HTTP $code" })
-    }
+    private fun OkHttpResponse.toProxyStatus(): IStatus = Status.lookup(code) ?: HttpStatus(code, message.ifBlank { "HTTP $code" })
 
     private fun Response.copyHeadersFrom(upstream: OkHttpResponse): Response {
         FORWARDED_RESPONSE_HEADERS.forEach { name ->
@@ -417,9 +431,10 @@ internal class HlsProxyServer(
         return this
     }
 
-    private fun errorResponse(status: IStatus, message: String): Response {
-        return newFixedLengthResponse(status, MIME_PLAINTEXT, message)
-    }
+    private fun errorResponse(
+        status: IStatus,
+        message: String,
+    ): Response = newFixedLengthResponse(status, MIME_PLAINTEXT, message)
 
     private fun String.toByteRange(bodySize: Int): IntRange? {
         if (!startsWith("bytes=", ignoreCase = true) || ',' in this || bodySize <= 0) {
@@ -435,13 +450,15 @@ internal class HlsProxyServer(
             return start until bodySize
         }
 
-        val start = startValue.toLongOrNull()?.takeIf { it in 0 until bodySize.toLong() }
-            ?: return null
-        val end = if (endValue.isEmpty()) {
-            bodySize - 1L
-        } else {
-            endValue.toLongOrNull()?.coerceAtMost(bodySize - 1L) ?: return null
-        }
+        val start =
+            startValue.toLongOrNull()?.takeIf { it in 0 until bodySize.toLong() }
+                ?: return null
+        val end =
+            if (endValue.isEmpty()) {
+                bodySize - 1L
+            } else {
+                endValue.toLongOrNull()?.coerceAtMost(bodySize - 1L) ?: return null
+            }
         if (end < start) return null
         return start.toInt()..end.toInt()
     }
@@ -507,19 +524,19 @@ internal class HlsProxyServer(
     }
 
     private val HlsResourceKind.extension: String
-        get() = when (this) {
-            HlsResourceKind.PLAYLIST -> "m3u8"
-            HlsResourceKind.SEGMENT -> "ts"
-            HlsResourceKind.INITIALIZATION -> "mp4"
-            HlsResourceKind.KEY -> "key"
-            HlsResourceKind.OTHER -> "bin"
-        }
+        get() =
+            when (this) {
+                HlsResourceKind.PLAYLIST -> "m3u8"
+                HlsResourceKind.SEGMENT -> "ts"
+                HlsResourceKind.INITIALIZATION -> "mp4"
+                HlsResourceKind.KEY -> "key"
+                HlsResourceKind.OTHER -> "bin"
+            }
 
-    private val sessions = object : LinkedHashMap<String, ProxySession>(maxSessions, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ProxySession>?): Boolean {
-            return size > maxSessions
+    private val sessions =
+        object : LinkedHashMap<String, ProxySession>(maxSessions, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ProxySession>?): Boolean = size > maxSessions
         }
-    }
 
     companion object {
         private const val LOOPBACK_HOST = "127.0.0.1"
@@ -529,18 +546,20 @@ internal class HlsProxyServer(
         private const val MP4_MIME = "video/mp4"
         private const val DEFAULT_BINARY_MIME = "application/octet-stream"
 
-        private val FORWARDED_REQUEST_HEADERS = listOf(
-            "Range",
-            "If-Range",
-            "If-None-Match",
-            "If-Modified-Since",
-        )
-        private val FORWARDED_RESPONSE_HEADERS = listOf(
-            "Content-Range",
-            "Accept-Ranges",
-            "ETag",
-            "Last-Modified",
-            "Expires",
-        )
+        private val FORWARDED_REQUEST_HEADERS =
+            listOf(
+                "Range",
+                "If-Range",
+                "If-None-Match",
+                "If-Modified-Since",
+            )
+        private val FORWARDED_RESPONSE_HEADERS =
+            listOf(
+                "Content-Range",
+                "Accept-Ranges",
+                "ETag",
+                "Last-Modified",
+                "Expires",
+            )
     }
 }

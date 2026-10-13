@@ -15,13 +15,20 @@ data class DailyQuality(
     val id: String? = null,
 ) {
     @Serializable
-    data class Error(val type: String)
+    data class Error(
+        val type: String,
+    )
 }
 
 @Serializable
-data class Auto(val auto: List<Item>) {
+data class Auto(
+    val auto: List<Item>,
+) {
     @Serializable
-    data class Item(val type: String, val url: String)
+    data class Item(
+        val type: String,
+        val url: String,
+    )
 }
 
 @Serializable
@@ -31,15 +38,17 @@ data class Subtitle(
 )
 
 @Serializable
-data class SubtitleDto(val label: String, val urls: List<String>)
+data class SubtitleDto(
+    val label: String,
+    val urls: List<String>,
+)
 
 object SubtitleListSerializer :
     JsonTransformingSerializer<List<SubtitleDto>>(ListSerializer(SubtitleDto.serializer())) {
-    override fun transformDeserialize(element: JsonElement): JsonElement =
-        when (element) {
-            is JsonObject -> JsonArray(element.values.toList())
-            else -> JsonArray(emptyList())
-        }
+    override fun transformDeserialize(element: JsonElement): JsonElement = when (element) {
+        is JsonObject -> JsonArray(element.values.toList())
+        else -> JsonArray(emptyList())
+    }
 }
 
 @Serializable
@@ -49,9 +58,13 @@ data class TokenResponse(
 )
 
 @Serializable
-data class ProtectedResponse(val data: DataObject) {
+data class ProtectedResponse(
+    val data: DataObject,
+) {
     @Serializable
-    data class DataObject(val video: VideoObject) {
+    data class DataObject(
+        val video: VideoObject,
+    ) {
         @Serializable
         data class VideoObject(
             val id: String,

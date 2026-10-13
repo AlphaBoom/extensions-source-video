@@ -1,21 +1,12 @@
-buildscript {
-    repositories {
-        mavenCentral()
-        google()
-        maven(url = "https://plugins.gradle.org/m2/")
-    }
-    dependencies {
-        classpath(libs.gradle.agp)
-        classpath(libs.gradle.kotlin)
-        classpath(libs.gradle.kotlin.serialization)
-        classpath(libs.gradle.kotlinter)
-    }
+plugins {
+    alias(libs.plugins.android.application) apply false
+    alias(libs.plugins.android.library) apply false
+    alias(libs.plugins.kotlin.jvm) apply false
+    alias(libs.plugins.kotlin.serialization) apply false
+    id("video-format")
 }
 
-allprojects {
-    tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-        kotlinOptions {
-            jvmTarget = JavaVersion.VERSION_1_8.toString()
-        }
-    }
+tasks.named<Delete>("clean") {
+    delete(layout.buildDirectory)
+    dependsOn(gradle.includedBuild("build-logic").task(":clean"))
 }

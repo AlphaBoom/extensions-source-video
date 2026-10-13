@@ -6,8 +6,13 @@ import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 
-class VidBomExtractor(private val client: OkHttpClient) {
-    fun videosFromUrl(url: String, headers: Headers? = null): List<Video> {
+class VidBomExtractor(
+    private val client: OkHttpClient,
+) {
+    fun videosFromUrl(
+        url: String,
+        headers: Headers? = null,
+    ): List<Video> {
         val request = if (headers != null) GET(url, headers) else GET(url)
         val doc = client.newCall(request).execute().asJsoup()
         val script = doc.selectFirst("script:containsData(sources)")!!
@@ -19,7 +24,7 @@ class VidBomExtractor(private val client: OkHttpClient) {
             if (quality.length > 15) {
                 quality = "Vidshare: 480p"
             }
-            Video(src, quality, src)
+            Video(videoUrl = src, videoTitle = quality, initialized = true)
         }
     }
 }

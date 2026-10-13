@@ -8,10 +8,16 @@ import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 
-class SendvidExtractor(private val client: OkHttpClient, private val headers: Headers) {
+class SendvidExtractor(
+    private val client: OkHttpClient,
+    private val headers: Headers,
+) {
     private val playlistUtils by lazy { PlaylistUtils(client, headers) }
 
-    fun videosFromUrl(url: String, prefix: String = ""): List<Video> {
+    fun videosFromUrl(
+        url: String,
+        prefix: String = "",
+    ): List<Video> {
         val document = client.newCall(GET(url, headers)).execute().asJsoup()
         val masterUrl = document.selectFirst("source#video_source")?.attr("src") ?: return emptyList()
 
@@ -19,11 +25,13 @@ class SendvidExtractor(private val client: OkHttpClient, private val headers: He
             playlistUtils.extractFromHls(masterUrl, url, videoNameGen = { prefix + "Sendvid:$it" })
         } else {
             val httpUrl = "https://${url.toHttpUrl()}"
-            val newHeaders = headers.newBuilder()
-                .set("Origin", httpUrl)
-                .set("Referer", "$httpUrl/")
-                .build()
-            listOf(Video(masterUrl, prefix + "Sendvid:default", masterUrl, newHeaders))
+            val newHeaders =
+                headers
+                    .newBuilder()
+                    .set("Origin", httpUrl)
+                    .set("Referer", "$httpUrl/")
+                    .build()
+            listOf(Video(videoUrl = masterUrl, videoTitle = prefix + "Sendvid:default", headers = newHeaders, initialized = true))
         }
     }
 }

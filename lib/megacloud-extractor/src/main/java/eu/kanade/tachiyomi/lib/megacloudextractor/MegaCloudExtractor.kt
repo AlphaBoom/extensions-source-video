@@ -32,9 +32,11 @@ class MegaCloudExtractor(
     private val webViewResolver by lazy { WebViewResolver(headers) }
 
     private val cacheControl = CacheControl.Builder().noStore().build()
-    private val noCacheClient = client.newBuilder()
-        .cache(null)
-        .build()
+    private val noCacheClient =
+        client
+            .newBuilder()
+            .cache(null)
+            .build()
 
     companion object {
         private val SERVER_URL = arrayOf("https://megacloud.tv", "https://rapid-cloud.co")
@@ -47,7 +49,7 @@ class MegaCloudExtractor(
         private var shouldUpdateKey = false
         private const val PREF_KEY_KEY = "megacloud_key_"
         private const val PREF_KEY_DEFAULT = "[[0, 0]]"
-        
+
         private inline fun <reified R> runLocked(crossinline block: () -> R) = runBlocking(Dispatchers.IO) {
             MUTEX.withLock { block() }
         }
@@ -65,56 +67,80 @@ class MegaCloudExtractor(
     }
 
     private fun updateKey(type: String) {
-        val scriptUrl = when (type) {
-            "1" -> E1_SCRIPT_URL
-            "6" -> E6_SCRIPT_URL
-            else -> throw Exception("Unknown key type")
-        }
-        val script = noCacheClient.newCall(GET(scriptUrl, cache = cacheControl))
-            .execute()
-            .body.string()
+        val scriptUrl =
+            when (type) {
+                "1" -> E1_SCRIPT_URL
+                "6" -> E6_SCRIPT_URL
+                else -> throw Exception("Unknown key type")
+            }
+        val script =
+            noCacheClient
+                .newCall(GET(scriptUrl, cache = cacheControl))
+                .execute()
+                .body
+                .string()
         val regex =
             Regex("case\\s*0x[0-9a-f]+:(?![^;]*=partKey)\\s*\\w+\\s*=\\s*(\\w+)\\s*,\\s*\\w+\\s*=\\s*(\\w+);")
         val matches = regex.findAll(script).toList()
-        val indexPairs = matches.map { match ->
-            val var1 = match.groupValues[1]
-            val var2 = match.groupValues[2]
+        val indexPairs =
+            matches
+                .map { match ->
+                    val var1 = match.groupValues[1]
+                    val var2 = match.groupValues[2]
 
-            val regexVar1 = Regex(",$var1=((?:0x)?([0-9a-fA-F]+))")
-            val regexVar2 = Regex(",$var2=((?:0x)?([0-9a-fA-F]+))")
+                    val regexVar1 = Regex(",$var1=((?:0x)?([0-9a-fA-F]+))")
+                    val regexVar2 = Regex(",$var2=((?:0x)?([0-9a-fA-F]+))")
 
-            val matchVar1 = regexVar1.find(script)?.groupValues?.get(1)?.removePrefix("0x")
-            val matchVar2 = regexVar2.find(script)?.groupValues?.get(1)?.removePrefix("0x")
+                    val matchVar1 =
+                        regexVar1
+                            .find(script)
+                            ?.groupValues
+                            ?.get(1)
+                            ?.removePrefix("0x")
+                    val matchVar2 =
+                        regexVar2
+                            .find(script)
+                            ?.groupValues
+                            ?.get(1)
+                            ?.removePrefix("0x")
 
-            if (matchVar1 != null && matchVar2 != null) {
-                try {
-                    listOf(matchVar1.toInt(16), matchVar2.toInt(16))
-                } catch (e: NumberFormatException) {
-                    emptyList()
-                }
-            } else {
-                emptyList()
-            }
-        }.filter { it.isNotEmpty() }
+                    if (matchVar1 != null && matchVar2 != null) {
+                        try {
+                            listOf(matchVar1.toInt(16), matchVar2.toInt(16))
+                        } catch (e: NumberFormatException) {
+                            emptyList()
+                        }
+                    } else {
+                        emptyList()
+                    }
+                }.filter { it.isNotEmpty() }
         val encoded = json.encodeToString(indexPairs)
         preferences.edit().putString(PREF_KEY_KEY + type, encoded).apply()
     }
 
-    private fun cipherTextCleaner(data: String, type: String): Pair<String, String> {
+    private fun cipherTextCleaner(
+        data: String,
+        type: String,
+    ): Pair<String, String> {
         val indexPairs = getKey(type)
-        val (password, ciphertext, _) = indexPairs.fold(Triple("", data, 0)) { previous, item ->
-            val start = item.first() + previous.third
-            val end = start + item.last()
-            val passSubstr = data.substring(start, end)
-            val passPart = previous.first + passSubstr
-            val cipherPart = previous.second.replace(passSubstr, "")
-            Triple(passPart, cipherPart, previous.third + item.last())
-        }
+        val (password, ciphertext, _) =
+            indexPairs.fold(Triple("", data, 0)) { previous, item ->
+                val start = item.first() + previous.third
+                val end = start + item.last()
+                val passSubstr = data.substring(start, end)
+                val passPart = previous.first + passSubstr
+                val cipherPart = previous.second.replace(passSubstr, "")
+                Triple(passPart, cipherPart, previous.third + item.last())
+            }
 
         return Pair(ciphertext, password)
     }
 
-    private fun tryDecrypting(ciphered: String, type: String, attempts: Int = 0): String {
+    private fun tryDecrypting(
+        ciphered: String,
+        type: String,
+        attempts: Int = 0,
+    ): String {
         if (attempts > 2) throw Exception("PLEASE NUKE ANIWATCH AND CLOUDFLARE")
         val (ciphertext, password) = cipherTextCleaner(ciphered, type)
         return CryptoAES.decrypt(ciphertext, password).ifEmpty {
@@ -124,15 +150,20 @@ class MegaCloudExtractor(
         }
     }
 
-    fun getVideosFromUrl(url: String, type: String, name: String): List<Video> {
+    fun getVideosFromUrl(
+        url: String,
+        type: String,
+        name: String,
+    ): List<Video> {
         val video = getVideoDto(url)
 
         val masterUrl = video.sources.first().file
-        val subs2 = video.tracks
-            ?.filter { it.kind == "captions" }
-            ?.map { Track(it.file, it.label) }
-            .orEmpty()
-            .let { playlistUtils.fixSubtitles(it) }
+        val subs2 =
+            video.tracks
+                ?.filter { it.kind == "captions" }
+                ?.map { Track(it.file, it.label) }
+                .orEmpty()
+                .let { playlistUtils.fixSubtitles(it) }
         return playlistUtils.extractFromHls(
             masterUrl,
             videoNameGen = { "$name - $it - $type" },
@@ -146,16 +177,22 @@ class MegaCloudExtractor(
 
         val keyType = SOURCES_KEY[type]
 
-        val id = url.substringAfter(SOURCES_SPLITTER[type], "")
-            .substringBefore("?", "").ifEmpty { throw Exception("I HATE THE ANTICHRIST") }
+        val id =
+            url
+                .substringAfter(SOURCES_SPLITTER[type], "")
+                .substringBefore("?", "")
+                .ifEmpty { throw Exception("I HATE THE ANTICHRIST") }
 
         if (type == 0) {
             return webViewResolver.getSources(id)!!
         }
 
-        val srcRes = client.newCall(GET(SERVER_URL[type] + SOURCES_URL[type] + id))
-            .execute()
-            .body.string()
+        val srcRes =
+            client
+                .newCall(GET(SERVER_URL[type] + SOURCES_URL[type] + id))
+                .execute()
+                .body
+                .string()
 
         val data = json.decodeFromString<SourceResponseDto>(srcRes)
 
@@ -181,8 +218,14 @@ class MegaCloudExtractor(
     )
 
     @Serializable
-    data class VideoLink(val file: String = "")
+    data class VideoLink(
+        val file: String = "",
+    )
 
     @Serializable
-    data class TrackDto(val file: String, val kind: String, val label: String = "")
-} 
+    data class TrackDto(
+        val file: String,
+        val kind: String,
+        val label: String = "",
+    )
+}

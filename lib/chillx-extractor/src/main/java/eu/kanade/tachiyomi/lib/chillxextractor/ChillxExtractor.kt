@@ -6,7 +6,10 @@ import eu.kanade.tachiyomi.lib.playlistutils.PlaylistUtils
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 
-class ChillxExtractor(private val client: OkHttpClient, private val headers: Headers) {
+class ChillxExtractor(
+    private val client: OkHttpClient,
+    private val headers: Headers,
+) {
     private val playlistUtils by lazy { PlaylistUtils(client, headers) }
     private val webViewResolver by lazy { WebViewResolver(client, headers) }
 
@@ -17,36 +20,39 @@ class ChillxExtractor(private val client: OkHttpClient, private val headers: Hea
         private val REGEX_SUBS = Regex("""\{"file":"([^"]+)","label":"([^"]+)","kind":"captions","default":\w+\}""")
     }
 
-    fun videoFromUrl(url: String, prefix: String = "Chillx - "): List<Video> {
+    fun videoFromUrl(
+        url: String,
+        prefix: String = "Chillx - ",
+    ): List<Video> {
         val data = webViewResolver.getDecryptedData(url) ?: return emptyList()
 
-        val masterUrl = REGEX_SOURCES.find(data)?.groupValues?.get(1)
-            ?: REGEX_FILE.find(data)?.groupValues?.get(1)
-            ?: REGEX_SOURCE.find(data)?.groupValues?.get(1)
-            ?: return emptyList()
+        val masterUrl =
+            REGEX_SOURCES.find(data)?.groupValues?.get(1)
+                ?: REGEX_FILE.find(data)?.groupValues?.get(1)
+                ?: REGEX_SOURCE.find(data)?.groupValues?.get(1)
+                ?: return emptyList()
 
-        val subtitleList = buildList {
-            val subtitles = REGEX_SUBS.findAll(data)
-            subtitles.forEach {
-                add(Track(it.groupValues[1], decodeUnicodeEscape(it.groupValues[2])))
+        val subtitleList =
+            buildList {
+                val subtitles = REGEX_SUBS.findAll(data)
+                subtitles.forEach {
+                    add(Track(it.groupValues[1], decodeUnicodeEscape(it.groupValues[2])))
+                }
             }
-        }
 
-        val videoList = playlistUtils.extractFromHls(
-            playlistUrl = masterUrl,
-            referer = url,
-            videoNameGen = { "$prefix$it" },
-            subtitleList = subtitleList,
-        )
+        val videoList =
+            playlistUtils.extractFromHls(
+                playlistUrl = masterUrl,
+                referer = url,
+                videoNameGen = { "$prefix$it" },
+                subtitleList = subtitleList,
+            )
 
         return videoList.map {
-            Video(
-                url = it.url,
-                quality = it.quality,
-                videoUrl = it.videoUrl,
+            it.copy(
                 headers = it.headers,
-                audioTracks = it.audioTracks,
                 subtitleTracks = playlistUtils.fixSubtitles(it.subtitleTracks),
+                initialized = true,
             )
         }
     }
@@ -54,7 +60,10 @@ class ChillxExtractor(private val client: OkHttpClient, private val headers: Hea
     private fun decodeUnicodeEscape(input: String): String {
         val regex = Regex("u([0-9a-fA-F]{4})")
         return regex.replace(input) {
-            it.groupValues[1].toInt(16).toChar().toString()
+            it.groupValues[1]
+                .toInt(16)
+                .toChar()
+                .toString()
         }
     }
 }

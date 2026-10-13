@@ -13,7 +13,9 @@ package eu.kanade.tachiyomi.lib.unpacker
  *
  * Note that all methods move [startIndex] over the ending delimiter.
  */
-class SubstringExtractor(private val text: String) {
+class SubstringExtractor(
+    private val text: String,
+) {
     private var startIndex = 0
 
     fun skipOver(str: String) {
@@ -30,7 +32,10 @@ class SubstringExtractor(private val text: String) {
         return result
     }
 
-    fun substringBetween(left: String, right: String): String {
+    fun substringBetween(
+        left: String,
+        right: String,
+    ): String {
         val index = text.indexOf(left, startIndex)
         if (index == -1) return ""
         val leftIndex = index + left.length

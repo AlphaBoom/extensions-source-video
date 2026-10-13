@@ -10,9 +10,9 @@ EXTENSION_REGEX = re.compile(r"^src/(?P<lang>[^/]+)/(?P<extension>[^/]+)")
 MULTISRC_LIB_REGEX = re.compile(r"^lib-multisrc/(?P<multisrc>[^/]+)")
 LIB_REGEX = re.compile(r"^lib/(?P<lib>[^/]+)")
 CORE_FILES_REGEX = re.compile(
-    r"^(buildSrc/|core/|gradle/|build\.gradle\.kts|common\.gradle|"
+    r"^(buildSrc/|common/|core/|gradle/|build\.gradle\.kts|common\.gradle|"
     r"gradle\.properties|gradlew(?:\.bat)?|repositories\.gradle\.kts|"
-    r"settings\.gradle\.kts|"
+    r"settings\.gradle\.kts|\.editorconfig$|"
     r"\.github/scripts/|\.github/workflows/build_(?:push|pull_request)\.yml$)"
 )
 
@@ -83,7 +83,7 @@ def resolve_extensions(multisrcs: set[str], libs: set[str]) -> set[tuple[str, st
     patterns = []
     if multisrcs:
         multisrc_pattern = "|".join(map(re.escape, multisrcs))
-        patterns.append(rf"themePkg\s*=\s*[\"'](?:{multisrc_pattern})[\"']")
+        patterns.append(rf"(?:themePkg|theme)\s*=\s*[\"'](?:{multisrc_pattern})[\"']")
     if libs:
         lib_pattern = "|".join(map(re.escape, libs))
         patterns.append(

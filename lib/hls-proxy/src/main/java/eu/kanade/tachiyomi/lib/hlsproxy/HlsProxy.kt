@@ -18,7 +18,6 @@ class HlsProxy(
     private val maxSessions: Int = DEFAULT_MAX_SESSIONS,
     private val sessionTtlMillis: Long = DEFAULT_SESSION_TTL_MILLIS,
 ) : Closeable {
-
     init {
         require(maxSessions > 0) { "maxSessions must be positive" }
         require(sessionTtlMillis > 0) { "sessionTtlMillis must be positive" }
@@ -37,9 +36,7 @@ class HlsProxy(
         playlistUrl: String,
         headers: Headers = Headers.Builder().build(),
         options: HlsProxyOptions = HlsProxyOptions(),
-    ): String {
-        return getOrStartServer().createSession(playlistUrl, headers, options)
-    }
+    ): String = getOrStartServer().createSession(playlistUrl, headers, options)
 
     /**
      * Returns a copy of [video] whose player-facing URL uses this proxy.
@@ -48,7 +45,7 @@ class HlsProxy(
         video: Video,
         options: HlsProxyOptions = HlsProxyOptions(),
     ): Video {
-        val upstreamUrl = video.videoUrl ?: video.url
+        val upstreamUrl = video.videoUrl
         val upstreamHeaders = video.headers ?: Headers.Builder().build()
         return video.copy(
             videoUrl = proxy(upstreamUrl, upstreamHeaders, options),

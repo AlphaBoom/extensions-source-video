@@ -7,8 +7,7 @@ import re
 import subprocess
 import sys
 
-VERSION_STR = "VersionCode ="
-VERSION_REGEX = re.compile(f"{VERSION_STR} (\\d+)")
+VERSION_REGEX = re.compile(r'(versionCode\s*=\s*|extVersionCode\s*=\s*|extra\["baseVersionCode"\]\s*=\s*)(\d+)')
 BUMPED_FILES: list[Path] = []
 
 BOT_EMAIL = "177773202+Kohi-den-Bot@users.noreply.github.com"
@@ -18,7 +17,7 @@ def has_match(query: str, file: Path) -> tuple[Path, bool]:
     return (file, query in file.read_text())
 
 def find_files_with_match(query: str, include_multisrc: bool = True) -> list[Path]:
-    files = Path("src").glob("*/*/build.gradle")
+    files = itertools.chain(Path("src").glob("*/*/build.gradle"), Path("src").glob("*/*/build.gradle.kts"))
     if include_multisrc:
         files = itertools.chain(files, Path("lib-multisrc").glob("*/build.gradle.kts"))
 
@@ -32,9 +31,9 @@ def find_files_with_match(query: str, include_multisrc: bool = True) -> list[Pat
         return [path for path, result in results if result]
 
 def replace_version(match: re.Match) -> str:
-    version = int(match.group(1))
+    version = int(match.group(2))
     print(f"{version} -> {version + 1}")
-    return f"{VERSION_STR} {version + 1}"
+    return f"{match.group(1)}{version + 1}"
 
 def bump_version(file: Path):
     BUMPED_FILES.append(file)
@@ -42,11 +41,12 @@ def bump_version(file: Path):
         print(f"\n{file}: ", end="")
         text = VERSION_REGEX.sub(replace_version, f.read())
         # Move the cursor to the start again, to prevent writing at the end
-        f.seek(0) 
+        f.seek(0)
         f.write(text)
+        f.truncate()
 
 def bump_lib_multisrc(theme: str):
-    for file in find_files_with_match(f"themePkg = '{theme}'", include_multisrc=False):
+    for file in find_files_with_match(f'theme = "{theme}"', include_multisrc=False):
         bump_version(file)
 
 def commit_changes():

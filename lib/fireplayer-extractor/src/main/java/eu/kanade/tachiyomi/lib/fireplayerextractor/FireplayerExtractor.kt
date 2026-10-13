@@ -22,12 +22,14 @@ class FireplayerExtractor(
     ): List<Video> {
         val host = videoHost ?: defaultHost ?: "https://${url.toHttpUrl().host}"
 
-        val headers = Headers.Builder()
-            .set("X-Requested-With", "XMLHttpRequest")
-            .set("Referer", host)
-            .set("Origin", "https://${host.toHttpUrl().host}")
-            .set("X-Requested-With", "XMLHttpRequest")
-            .build()
+        val headers =
+            Headers
+                .Builder()
+                .set("X-Requested-With", "XMLHttpRequest")
+                .set("Referer", host)
+                .set("Origin", "https://${host.toHttpUrl().host}")
+                .set("X-Requested-With", "XMLHttpRequest")
+                .build()
 
         var id = url.substringAfterLast("/")
 
@@ -35,7 +37,9 @@ class FireplayerExtractor(
             val doc = client.newCall(GET(url, headers)).execute().asJsoup()
 
             val script =
-                doc.selectFirst("script:containsData(eval):containsData(p,a,c,k,e,d)")?.data()
+                doc
+                    .selectFirst("script:containsData(eval):containsData(p,a,c,k,e,d)")
+                    ?.data()
                     ?.replace(Regex("[\\u00E0-\\u00FC]"), "-") // Fix a bug in JsUnpacker with accents
                     ?.let(JsUnpacker::unpackAndCombine)
                     ?: doc.selectFirst("script:containsData(FirePlayer)")?.data()
@@ -46,16 +50,22 @@ class FireplayerExtractor(
         }
 
         val postUrl = "$host/player/index.php?data=$id&do=getVideo"
-        val body = FormBody.Builder()
-            .add("hash", id)
-            .add("r", "")
-            .build()
+        val body =
+            FormBody
+                .Builder()
+                .add("hash", id)
+                .add("r", "")
+                .build()
 
-        val masterUrl = client.newCall(POST(postUrl, headers, body = body)).execute()
-            .body.string()
-            .substringAfter("securedLink\":\"")
-            .substringBefore('"')
-            .replace("\\", "")
+        val masterUrl =
+            client
+                .newCall(POST(postUrl, headers, body = body))
+                .execute()
+                .body
+                .string()
+                .substringAfter("securedLink\":\"")
+                .substringBefore('"')
+                .replace("\\", "")
 
         val playlistUtils = PlaylistUtils(client, headers)
 

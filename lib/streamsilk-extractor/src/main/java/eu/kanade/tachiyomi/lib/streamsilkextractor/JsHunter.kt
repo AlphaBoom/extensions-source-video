@@ -4,8 +4,9 @@ import java.util.regex.Matcher
 import java.util.regex.Pattern
 import kotlin.math.pow
 
-class JsHunter(private val hunterJS: String) {
-
+class JsHunter(
+    private val hunterJS: String,
+) {
     /**
      * Detects whether the javascript is H.U.N.T.E.R coded.
      *
@@ -28,7 +29,7 @@ class JsHunter(private val hunterJS: String) {
             val p: Pattern =
                 Pattern.compile(
                     """\}\("([^"]+)",[^,]+,\s*"([^"]+)",\s*(\d+),\s*(\d+)""",
-                    Pattern.DOTALL
+                    Pattern.DOTALL,
                 )
             val searchResults: Matcher = p.matcher(hunterJS)
             if (searchResults.find() && searchResults.groupCount() == 4) {
@@ -44,7 +45,11 @@ class JsHunter(private val hunterJS: String) {
         return null
     }
 
-    private fun duf(d: String, e: Int, f: Int = 10): Int {
+    private fun duf(
+        d: String,
+        e: Int,
+        f: Int = 10,
+    ): Int {
         val str = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ+/"
         val g = str.toList()
         val h = g.take(e)
@@ -64,7 +69,12 @@ class JsHunter(private val hunterJS: String) {
         return k.toIntOrNull() ?: 0
     }
 
-    private fun hunter(h: String, n: String, t: Int, e: Int): String {
+    private fun hunter(
+        h: String,
+        n: String,
+        t: Int,
+        e: Int,
+    ): String {
         var result = ""
         var i = 0
         while (i < h.length) {

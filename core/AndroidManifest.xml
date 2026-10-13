@@ -7,6 +7,10 @@
 
         <meta-data android:name="tachiyomi.animeextension.class" android:value="${extClass}" />
         <meta-data android:name="tachiyomi.animeextension.nsfw" android:value="${nsfw}" />
+        <meta-data android:name="aniyomix.name" android:value="${extensionName}" />
+        <meta-data android:name="aniyomix.contentWarning" android:value="${contentWarning}" />
+        <meta-data android:name="aniyomix.torrent" android:value="${torrent}" />
+        <meta-data android:name="aniyomix.extensionLib" android:value="${extensionLib}" />
 
     </application>
 

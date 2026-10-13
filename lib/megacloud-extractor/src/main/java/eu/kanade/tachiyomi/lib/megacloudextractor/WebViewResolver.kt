@@ -17,13 +17,17 @@ import uy.kohesive.injekt.injectLazy
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-class WebViewResolver(private val globalHeaders: Headers) {
+class WebViewResolver(
+    private val globalHeaders: Headers,
+) {
     private val context: Application by injectLazy()
     private val handler by lazy { Handler(Looper.getMainLooper()) }
     private val json: Json by injectLazy()
     private val tag by lazy { javaClass.simpleName }
 
-    class JsInterface(private val latch: CountDownLatch) {
+    class JsInterface(
+        private val latch: CountDownLatch,
+    ) {
         var result: String? = null
 
         @JavascriptInterface
@@ -34,9 +38,7 @@ class WebViewResolver(private val globalHeaders: Headers) {
         }
     }
 
-    fun getJsContent(file: String): String {
-        return javaClass.getResource(file)!!.readText()
-    }
+    fun getJsContent(file: String): String = javaClass.getResource(file)!!.readText()
 
     @SuppressLint("SetJavaScriptEnabled")
     fun getSources(xrax: String): VideoDto? {
@@ -58,41 +60,46 @@ class WebViewResolver(private val globalHeaders: Headers) {
 
             webview.addJavascriptInterface(jsi, "jsinterface")
 
-            webview.webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView?, url: String?) {
-                    Log.d(tag, "onPageFinished $url")
-                    super.onPageFinished(view, url)
+            webview.webViewClient =
+                object : WebViewClient() {
+                    override fun onPageFinished(
+                        view: WebView?,
+                        url: String?,
+                    ) {
+                        Log.d(tag, "onPageFinished $url")
+                        super.onPageFinished(view, url)
 
-                    Log.d(tag, "injecting scripts")
-                    view?.evaluateJavascript(getJsContent("/assets/crypto-js.js")) {}
-                    view?.evaluateJavascript(getJsContent("/assets/megacloud.decodedpng.js")) {}
-                    view?.evaluateJavascript(getJsContent("/assets/megacloud.getsrcs.js")) {}
+                        Log.d(tag, "injecting scripts")
+                        view?.evaluateJavascript(getJsContent("/assets/crypto-js.js")) {}
+                        view?.evaluateJavascript(getJsContent("/assets/megacloud.decodedpng.js")) {}
+                        view?.evaluateJavascript(getJsContent("/assets/megacloud.getsrcs.js")) {}
 
-                    Log.d(tag, "running script")
-                    view?.evaluateJavascript(
-                        "getSources(\"${xrax}\")" +
-                            ".then( s => jsinterface.setResponse( JSON.stringify(s) ) )",
-                    ) {}
+                        Log.d(tag, "running script")
+                        view?.evaluateJavascript(
+                            "getSources(\"${xrax}\")" +
+                                ".then( s => jsinterface.setResponse( JSON.stringify(s) ) )",
+                        ) {}
+                    }
                 }
-            }
 
-            webview.webChromeClient = object : WebChromeClient() {
-                override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
-                    Log.d(
-                        tag,
-                        "Chrome: [${consoleMessage?.messageLevel()}]" +
-                            "${consoleMessage?.message()}" +
-                            " at ${consoleMessage?.lineNumber()}" +
-                            " in ${consoleMessage?.sourceId()}",
-                    )
-                    return super.onConsoleMessage(consoleMessage)
+            webview.webChromeClient =
+                object : WebChromeClient() {
+                    override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+                        Log.d(
+                            tag,
+                            "Chrome: [${consoleMessage?.messageLevel()}]" +
+                                "${consoleMessage?.message()}" +
+                                " at ${consoleMessage?.lineNumber()}" +
+                                " in ${consoleMessage?.sourceId()}",
+                        )
+                        return super.onConsoleMessage(consoleMessage)
+                    }
                 }
-            }
 
             val headers = mapOf("X-Requested-With" to "org.lineageos.jelly")
 
             webView?.loadUrl("https://megacloud.tv/about", headers)
-        }  
+        }
 
         latch.await(TIMEOUT_SEC, TimeUnit.SECONDS)
 

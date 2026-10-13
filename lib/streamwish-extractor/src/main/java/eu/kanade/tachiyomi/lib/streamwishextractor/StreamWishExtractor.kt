@@ -13,28 +13,44 @@ import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 
-class StreamWishExtractor(private val client: OkHttpClient, private val headers: Headers) {
+class StreamWishExtractor(
+    private val client: OkHttpClient,
+    private val headers: Headers,
+) {
     private val playlistUtils by lazy { PlaylistUtils(client, headers) }
-    private val json = Json { isLenient = true; ignoreUnknownKeys = true }
+    private val json =
+        Json {
+            isLenient = true
+            ignoreUnknownKeys = true
+        }
 
-    fun videosFromUrl(url: String, prefix: String) = videosFromUrl(url) { "$prefix - $it" }
+    fun videosFromUrl(
+        url: String,
+        prefix: String,
+    ) = videosFromUrl(url) { "$prefix - $it" }
 
-    fun videosFromUrl(url: String, videoNameGen: (String) -> String = { quality -> "StreamWish - $quality" }): List<Video> {
-
+    fun videosFromUrl(
+        url: String,
+        videoNameGen: (String) -> String = { quality -> "StreamWish - $quality" },
+    ): List<Video> {
         val doc = client.newCall(GET(getEmbedUrl(url), headers)).execute().asJsoup()
 
-        val scriptBody = doc.selectFirst("script:containsData(m3u8)")?.data()
-            ?.let { script ->
-                if (script.contains("eval(function(p,a,c")) {
-                    JsUnpacker.unpackAndCombine(script)
-                } else {
-                    script
+        val scriptBody =
+            doc
+                .selectFirst("script:containsData(m3u8)")
+                ?.data()
+                ?.let { script ->
+                    if (script.contains("eval(function(p,a,c")) {
+                        JsUnpacker.unpackAndCombine(script)
+                    } else {
+                        script
+                    }
                 }
+        val masterUrl =
+            scriptBody?.let {
+                M3U8_REGEX.find(it)?.value
             }
-        val masterUrl = scriptBody?.let {
-            M3U8_REGEX.find(it)?.value
-        }
-            ?: return emptyList()
+                ?: return emptyList()
 
         val subtitleList = extractSubtitles(scriptBody)
 
@@ -46,35 +62,38 @@ class StreamWishExtractor(private val client: OkHttpClient, private val headers:
         )
     }
 
-    private fun getEmbedUrl(url: String): String {
-        return if (url.contains("/f/")) {
-            val videoId = url.substringAfter("/f/")
-            "https://streamwish.com/$videoId"
-        } else {
-            url
-        }
+    private fun getEmbedUrl(url: String): String = if (url.contains("/f/")) {
+        val videoId = url.substringAfter("/f/")
+        "https://streamwish.com/$videoId"
+    } else {
+        url
     }
 
-    private fun extractSubtitles(script: String): List<Track> {
-        return try {
-            val subtitleStr = script
+    private fun extractSubtitles(script: String): List<Track> = try {
+        val subtitleStr =
+            script
                 .substringAfter("tracks")
                 .substringAfter("[")
                 .substringBefore("]")
-            val fixedSubtitleStr = FIX_TRACKS_REGEX.replace(subtitleStr) { match ->
+        val fixedSubtitleStr =
+            FIX_TRACKS_REGEX.replace(subtitleStr) { match ->
                 "\"${match.value}\""
             }
 
-            json.decodeFromString<List<TrackDto>>("[$fixedSubtitleStr]")
-                .filter { it.kind.equals("captions", true) }
-                .map { Track(it.file, it.label ?: "") }
-        } catch (e: SerializationException) {
-            emptyList()
-        }
+        json
+            .decodeFromString<List<TrackDto>>("[$fixedSubtitleStr]")
+            .filter { it.kind.equals("captions", true) }
+            .map { Track(it.file, it.label ?: "") }
+    } catch (e: SerializationException) {
+        emptyList()
     }
 
     @Serializable
-    private data class TrackDto(val file: String, val kind: String, val label: String? = null)
+    private data class TrackDto(
+        val file: String,
+        val kind: String,
+        val label: String? = null,
+    )
 
     private val M3U8_REGEX = Regex("""https[^"]*m3u8[^"]*""")
     private val FIX_TRACKS_REGEX = Regex("""(?<!["])(file|kind|label)(?!["])""")

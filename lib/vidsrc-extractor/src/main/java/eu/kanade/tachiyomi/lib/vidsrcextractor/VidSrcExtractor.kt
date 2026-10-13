@@ -19,8 +19,10 @@ import javax.crypto.Cipher
 import javax.crypto.spec.SecretKeySpec
 
 @OptIn(ExperimentalSerializationApi::class)
-class VidsrcExtractor(private val client: OkHttpClient, private val headers: Headers) {
-
+class VidsrcExtractor(
+    private val client: OkHttpClient,
+    private val headers: Headers,
+) {
     private val playlistUtils by lazy { PlaylistUtils(client, headers) }
     private val json: Json by injectLazy()
 
@@ -49,11 +51,12 @@ class VidsrcExtractor(private val client: OkHttpClient, private val headers: Hea
 
     private fun getApiUrl(embedLink: String): String {
         val host = embedLink.toHttpUrl().host
-        val params = embedLink.toHttpUrl().let { url ->
-            url.queryParameterNames.map {
-                Pair(it, url.queryParameter(it) ?: "")
+        val params =
+            embedLink.toHttpUrl().let { url ->
+                url.queryParameterNames.map {
+                    Pair(it, url.queryParameter(it) ?: "")
+                }
             }
-        }
         val vidId = embedLink.substringAfterLast("/").substringBefore("?")
         val apiSlug = encodeID(vidId, ENCRYPTION_KEY1)
         val h = encodeID(vidId, ENCRYPTION_KEY2)
@@ -75,28 +78,30 @@ class VidsrcExtractor(private val client: OkHttpClient, private val headers: Hea
         }
     }
 
-    private fun encodeID(videoID: String, key: String): String {
+    private fun encodeID(
+        videoID: String,
+        key: String,
+    ): String {
         val rc4Key = SecretKeySpec(key.toByteArray(), "RC4")
         val cipher = Cipher.getInstance("RC4")
         cipher.init(Cipher.DECRYPT_MODE, rc4Key, cipher.parameters)
-        return Base64.encode(cipher.doFinal(videoID.toByteArray()), Base64.DEFAULT)
+        return Base64
+            .encode(cipher.doFinal(videoID.toByteArray()), Base64.DEFAULT)
             .toString(Charsets.UTF_8)
             .replace("+", "-")
             .replace("/", "_")
             .trim()
     }
 
-    private fun List<Result.SubTrack>.toTracks(): List<Track> {
-        return filter {
-            it.kind == "captions"
-        }.mapNotNull {
-            runCatching {
-                Track(
-                    it.file,
-                    it.label,
-                )
-            }.getOrNull()
-        }
+    private fun List<Result.SubTrack>.toTracks(): List<Track> = filter {
+        it.kind == "captions"
+    }.mapNotNull {
+        runCatching {
+            Track(
+                it.file,
+                it.label,
+            )
+        }.getOrNull()
     }
 
     private fun vrfDecrypt(input: String): String {

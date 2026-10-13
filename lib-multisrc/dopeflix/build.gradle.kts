@@ -2,7 +2,7 @@ plugins {
     id("lib-multisrc")
 }
 
-baseVersionCode = 20
+extra["baseVersionCode"] = 21
 
 dependencies {
     api(project(":lib:dood-extractor"))

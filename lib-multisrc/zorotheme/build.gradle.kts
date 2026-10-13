@@ -2,7 +2,7 @@ plugins {
     id("lib-multisrc")
 }
 
-baseVersionCode = 6
+extra["baseVersionCode"] = 7
 
 dependencies {
     api(project(":lib:megacloud-extractor"))

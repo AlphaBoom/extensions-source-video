@@ -7,8 +7,9 @@ import okhttp3.Headers
 import okhttp3.OkHttpClient
 import java.net.URI
 
-class DoodExtractor(private val client: OkHttpClient) {
-
+class DoodExtractor(
+    private val client: OkHttpClient,
+) {
     fun videoFromUrl(
         url: String,
         prefix: String? = null,
@@ -24,13 +25,14 @@ class DoodExtractor(private val client: OkHttpClient) {
             if (!content.contains("'/pass_md5/")) return null
 
             // Obtener la calidad del título de la página
-            val extractedQuality = Regex("\\d{3,4}p")
-                .find(content.substringAfter("<title>").substringBefore("</title>"))
-                ?.groupValues
-                ?.getOrNull(0)
+            val extractedQuality =
+                Regex("\\d{3,4}p")
+                    .find(content.substringAfter("<title>").substringBefore("</title>"))
+                    ?.groupValues
+                    ?.getOrNull(0)
 
             // Determinar la calidad a usar
-            val newQuality = extractedQuality ?: ( if (redirect) " mirror" else "")
+            val newQuality = extractedQuality ?: (if (redirect) " mirror" else "")
 
             // Obtener el hash MD5
             val md5 = doodHost + (Regex("/pass_md5/[^']*").find(content)?.value ?: return null)
@@ -39,16 +41,20 @@ class DoodExtractor(private val client: OkHttpClient) {
             val expiry = System.currentTimeMillis()
 
             // Obtener la URL del video
-            val videoUrlStart = client.newCall(
-                GET(
-                    md5,
-                    Headers.headersOf("referer", newUrl),
-                ),
-            ).execute().body.string()
+            val videoUrlStart =
+                client
+                    .newCall(
+                        GET(
+                            md5,
+                            Headers.headersOf("referer", newUrl),
+                        ),
+                    ).execute()
+                    .body
+                    .string()
 
             val trueUrl = "$videoUrlStart$randomString?token=$token&expiry=$expiry"
 
-            Video(trueUrl, prefix + "Doodstream " + newQuality , trueUrl, headers = doodHeaders(doodHost), subtitleTracks = externalSubs)
+            Video(videoUrl = trueUrl, videoTitle = prefix + "Doodstream " + newQuality, headers = doodHeaders(doodHost), subtitleTracks = externalSubs, initialized = true)
         }.getOrNull()
     }
 
@@ -72,15 +78,15 @@ class DoodExtractor(private val client: OkHttpClient) {
     }
 
     // Método para obtener la base de la URL
-    private fun getBaseUrl(url: String): String {
-        return URI(url).let {
-            "${it.scheme}://${it.host}"
-        }
+    private fun getBaseUrl(url: String): String = URI(url).let {
+        "${it.scheme}://${it.host}"
     }
 
     // Método para obtener headers personalizados
-    private fun doodHeaders(host: String) = Headers.Builder().apply {
-        add("User-Agent", "Aniyomi")
-        add("Referer", "https://$host/")
-    }.build()
+    private fun doodHeaders(host: String) = Headers
+        .Builder()
+        .apply {
+            add("User-Agent", "Aniyomi")
+            add("Referer", "https://$host/")
+        }.build()
 }

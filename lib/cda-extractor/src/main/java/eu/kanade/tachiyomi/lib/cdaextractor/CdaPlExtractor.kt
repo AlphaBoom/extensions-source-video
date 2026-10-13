@@ -15,36 +15,48 @@ import uy.kohesive.injekt.injectLazy
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 
-class CdaPlExtractor(private val client: OkHttpClient) {
-
+class CdaPlExtractor(
+    private val client: OkHttpClient,
+) {
     private val json: Json by injectLazy()
 
-    fun getVideosFromUrl(url: String, headers: Headers, prefix: String): List<Video> {
-        val embedHeaders = headers.newBuilder()
-            .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
-            .add("Host", url.toHttpUrl().host)
-            .build()
+    fun getVideosFromUrl(
+        url: String,
+        headers: Headers,
+        prefix: String,
+    ): List<Video> {
+        val embedHeaders =
+            headers
+                .newBuilder()
+                .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
+                .add("Host", url.toHttpUrl().host)
+                .build()
 
-        val document = client.newCall(
-            GET(url, headers = embedHeaders),
-        ).execute().asJsoup()
+        val document =
+            client
+                .newCall(
+                    GET(url, headers = embedHeaders),
+                ).execute()
+                .asJsoup()
 
-        //Nic lepszego nie wymyśliłem jak ktoś kto przegląda ten kod znajdzie sposób lepszy to chetnie przyjme radę <3
-        //Do you have any idea how to write it differently? I will accept advice!
+        // Nic lepszego nie wymyśliłem jak ktoś kto przegląda ten kod znajdzie sposób lepszy to chetnie przyjme radę <3
+        // Do you have any idea how to write it differently? I will accept advice!
 
         val deletedMessage = "Materiał na który wskazywał ten link został usunięty przez jego właściciela lub Administratora!"
 
         if (document.toString().contains(deletedMessage)) return emptyList()
 
-        val data = json.decodeFromString<PlayerData>(
-            document.selectFirst("div[player_data]")!!.attr("player_data"),
-        )
+        val data =
+            json.decodeFromString<PlayerData>(
+                document.selectFirst("div[player_data]")!!.attr("player_data"),
+            )
         return data.video.qualities.map { quality ->
             if (quality.value == data.video.quality && quality.value != "lq") {
                 val videoUrl = decryptFile(data.video.file)
-                Video(videoUrl, "${prefix}cda.pl - ${quality.key}", videoUrl)
+                Video(videoUrl = videoUrl, videoTitle = "${prefix}cda.pl - ${quality.key}", initialized = true)
             } else {
-                val jsonBody = """
+                val jsonBody =
+                    """
                     {
                         "jsonrpc": "2.0",
                         "method": "videoGetLink",
@@ -57,20 +69,24 @@ class CdaPlExtractor(private val client: OkHttpClient) {
                             {}
                         ]
                     }
-                """.trimIndent().toRequestBody("application/json".toMediaType())
-                val postHeaders = Headers.headersOf(
-                    "Content-Type",
-                    "application/json",
-                    "X-Requested-With",
-                    "XMLHttpRequest",
-                )
-                val response = client.newCall(
-                    POST("https://www.cda.pl/", headers = postHeaders, body = jsonBody),
-                ).execute()
-                val parsed = json.decodeFromString<PostResponse>(
-                    response.body.string(),
-                )
-                Video(parsed.result.resp, "${prefix}cda.pl - ${quality.key}", parsed.result.resp)
+                    """.trimIndent().toRequestBody("application/json".toMediaType())
+                val postHeaders =
+                    Headers.headersOf(
+                        "Content-Type",
+                        "application/json",
+                        "X-Requested-With",
+                        "XMLHttpRequest",
+                    )
+                val response =
+                    client
+                        .newCall(
+                            POST("https://www.cda.pl/", headers = postHeaders, body = jsonBody),
+                        ).execute()
+                val parsed =
+                    json.decodeFromString<PostResponse>(
+                        response.body.string(),
+                    )
+                Video(videoUrl = parsed.result.resp, videoTitle = "${prefix}cda.pl - ${quality.key}", initialized = true)
             }
         }
     }

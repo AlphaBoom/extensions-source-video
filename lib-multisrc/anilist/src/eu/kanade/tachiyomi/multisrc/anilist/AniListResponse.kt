@@ -4,24 +4,34 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-internal data class AniListAnimeListResponse(val data: Data) {
+internal data class AniListAnimeListResponse(
+    val data: Data,
+) {
     @Serializable
-    data class Data(@SerialName("Page") val page: Page) {
+    data class Data(
+        @SerialName("Page") val page: Page,
+    ) {
         @Serializable
         data class Page(
             val pageInfo: PageInfo,
             val media: List<AniListMedia>,
         ) {
             @Serializable
-            data class PageInfo(val hasNextPage: Boolean)
+            data class PageInfo(
+                val hasNextPage: Boolean,
+            )
         }
     }
 }
 
 @Serializable
-internal data class AniListAnimeDetailsResponse(val data: Data) {
+internal data class AniListAnimeDetailsResponse(
+    val data: Data,
+) {
     @Serializable
-    data class Data(@SerialName("Media") val media: AniListMedia)
+    data class Data(
+        @SerialName("Media") val media: AniListMedia,
+    )
 }
 
 @Serializable
@@ -42,7 +52,9 @@ internal data class AniListMedia(
     )
 
     @Serializable
-    data class CoverImage(val large: String)
+    data class CoverImage(
+        val large: String,
+    )
 
     enum class Status {
         RELEASING,
@@ -53,8 +65,12 @@ internal data class AniListMedia(
     }
 
     @Serializable
-    data class Studios(val nodes: List<Node>) {
+    data class Studios(
+        val nodes: List<Node>,
+    ) {
         @Serializable
-        data class Node(val name: String)
+        data class Node(
+            val name: String,
+        )
     }
 }

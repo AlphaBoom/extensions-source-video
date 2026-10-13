@@ -55,8 +55,11 @@ internal const val ANIME_DETAILS_QUERY = """
       }
     }
 """
+
 private fun String.toQuery() = this.trimIndent().replace("%", "$")
-internal val SORT_QUERY = """
+
+internal val SORT_QUERY =
+    """
     query (
         ${"$"}page: Int,
         ${"$"}perPage: Int,
@@ -130,4 +133,6 @@ internal data class AnimeListVariables(
 }
 
 @Serializable
-internal data class AnimeDetailsVariables(val id: Int)
+internal data class AnimeDetailsVariables(
+    val id: Int,
+)

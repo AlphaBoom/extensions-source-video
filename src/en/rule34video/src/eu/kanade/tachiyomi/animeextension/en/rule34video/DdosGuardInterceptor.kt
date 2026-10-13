@@ -8,8 +8,9 @@ import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
 
-class DdosGuardInterceptor(private val client: OkHttpClient) : Interceptor {
-
+class DdosGuardInterceptor(
+    private val client: OkHttpClient,
+) : Interceptor {
     private val cookieManager by lazy { CookieManager.getInstance() }
 
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -23,39 +24,46 @@ class DdosGuardInterceptor(private val client: OkHttpClient) : Interceptor {
 
         response.close()
         val cookies = cookieManager.getCookie(originalRequest.url.toString())
-        val oldCookie = if (cookies != null && cookies.isNotEmpty()) {
-            cookies.split(";").mapNotNull { Cookie.parse(originalRequest.url, it) }
-        } else {
-            emptyList()
-        }
+        val oldCookie =
+            if (cookies != null && cookies.isNotEmpty()) {
+                cookies.split(";").mapNotNull { Cookie.parse(originalRequest.url, it) }
+            } else {
+                emptyList()
+            }
         val ddg2Cookie = oldCookie.firstOrNull { it.name == "__ddg2_" }
         if (!ddg2Cookie?.value.isNullOrEmpty()) {
             return chain.proceed(originalRequest)
         }
 
         val newCookie = getNewCookie(originalRequest.url) ?: return chain.proceed(originalRequest)
-        val newCookieHeader = (oldCookie + newCookie).joinToString("; ") { cookie ->
-            "${cookie.name}=${cookie.value}"
-        }
+        val newCookieHeader =
+            (oldCookie + newCookie).joinToString("; ") { cookie ->
+                "${cookie.name}=${cookie.value}"
+            }
 
         return chain.proceed(originalRequest.newBuilder().addHeader("cookie", newCookieHeader).build())
     }
 
     fun getNewCookie(url: HttpUrl): Cookie? {
         val cookies = cookieManager.getCookie(url.toString())
-        val oldCookie = if (cookies != null && cookies.isNotEmpty()) {
-            cookies.split(";").mapNotNull { Cookie.parse(url, it) }
-        } else {
-            emptyList()
-        }
+        val oldCookie =
+            if (cookies != null && cookies.isNotEmpty()) {
+                cookies.split(";").mapNotNull { Cookie.parse(url, it) }
+            } else {
+                emptyList()
+            }
         val ddg2Cookie = oldCookie.firstOrNull { it.name == "__ddg2_" }
         if (!ddg2Cookie?.value.isNullOrEmpty()) {
             return ddg2Cookie
         }
-        val wellKnown = client.newCall(GET(WELL_KNOWN_URL))
-            .execute().body.string()
-            .substringAfter("'", "")
-            .substringBefore("'", "")
+        val wellKnown =
+            client
+                .newCall(GET(WELL_KNOWN_URL))
+                .execute()
+                .body
+                .string()
+                .substringAfter("'", "")
+                .substringBefore("'", "")
         val checkUrl = "${url.scheme}://${url.host + wellKnown}"
         return client.newCall(GET(checkUrl)).execute().use { response ->
             response.header("set-cookie")?.let { Cookie.parse(url, it) }

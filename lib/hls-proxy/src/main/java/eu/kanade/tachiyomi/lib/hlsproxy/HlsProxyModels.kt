@@ -33,7 +33,10 @@ data class HlsResourceContext(
  * This is the main extension point for ad filtering and manifest repair.
  */
 fun interface HlsPlaylistTransformer {
-    fun transform(context: HlsResourceContext, playlist: String): String
+    fun transform(
+        context: HlsResourceContext,
+        playlist: String,
+    ): String
 }
 
 /**
@@ -43,7 +46,10 @@ fun interface HlsPlaylistTransformer {
  * per-resource authentication.
  */
 fun interface HlsRequestTransformer {
-    fun transform(context: HlsResourceContext, request: Request): Request
+    fun transform(
+        context: HlsResourceContext,
+        request: Request,
+    ): Request
 }
 
 /**
@@ -54,7 +60,10 @@ fun interface HlsRequestTransformer {
 interface HlsBodyTransformer {
     fun supports(context: HlsResourceContext): Boolean
 
-    fun transform(context: HlsResourceContext, body: ByteArray): ByteArray
+    fun transform(
+        context: HlsResourceContext,
+        body: ByteArray,
+    ): ByteArray
 }
 
 data class HlsProxyOptions(

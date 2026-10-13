@@ -20,7 +20,9 @@ import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-class CloudflareInterceptor(private val client: OkHttpClient) : Interceptor {
+class CloudflareInterceptor(
+    private val client: OkHttpClient,
+) : Interceptor {
     private val context: Application by injectLazy()
     private val handler by lazy { Handler(Looper.getMainLooper()) }
 
@@ -47,13 +49,18 @@ class CloudflareInterceptor(private val client: OkHttpClient) : Interceptor {
         }
     }
 
-    class CloudflareJSI(private val latch: CountDownLatch) {
+    class CloudflareJSI(
+        private val latch: CountDownLatch,
+    ) {
         @JavascriptInterface
         fun leave() = latch.countDown()
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    fun resolveWithWebView(request: Request, client: OkHttpClient): Request {
+    fun resolveWithWebView(
+        request: Request,
+        client: OkHttpClient,
+    ): Request {
         // We need to lock this thread until the WebView finds the challenge solution url, because
         // OkHttp doesn't support asynchronous interceptors.
         val latch = CountDownLatch(1)
@@ -63,7 +70,11 @@ class CloudflareInterceptor(private val client: OkHttpClient) : Interceptor {
         var webView: WebView? = null
 
         val origRequestUrl = request.url.toString()
-        val headers = request.headers.toMultimap().mapValues { it.value.getOrNull(0) ?: "" }.toMutableMap()
+        val headers =
+            request.headers
+                .toMultimap()
+                .mapValues { it.value.getOrNull(0) ?: "" }
+                .toMutableMap()
 
         handler.post {
             val webview = WebView(context)
@@ -79,11 +90,15 @@ class CloudflareInterceptor(private val client: OkHttpClient) : Interceptor {
             }
 
             webview.addJavascriptInterface(jsinterface, "CloudflareJSI")
-            webview.webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView?, url: String?) {
-                    view?.evaluateJavascript(CHECK_SCRIPT) {}
+            webview.webViewClient =
+                object : WebViewClient() {
+                    override fun onPageFinished(
+                        view: WebView?,
+                        url: String?,
+                    ) {
+                        view?.evaluateJavascript(CHECK_SCRIPT) {}
+                    }
                 }
-            }
 
             webview.loadUrl(origRequestUrl, headers)
         }
@@ -98,19 +113,23 @@ class CloudflareInterceptor(private val client: OkHttpClient) : Interceptor {
             webView = null
         }
 
-        val cookies = CookieManager.getInstance()
-            ?.getCookie(origRequestUrl)
-            ?.split(";")
-            ?.mapNotNull { Cookie.parse(request.url, it) }
-            ?: emptyList<Cookie>()
+        val cookies =
+            CookieManager
+                .getInstance()
+                ?.getCookie(origRequestUrl)
+                ?.split(";")
+                ?.mapNotNull { Cookie.parse(request.url, it) }
+                ?: emptyList<Cookie>()
 
         // Copy webview cookies to OkHTTP cookie storage
         cookies.forEach {
             client.cookieJar.saveFromResponse(
-                url = HttpUrl.Builder()
-                    .scheme("http")
-                    .host(it.domain)
-                    .build(),
+                url =
+                    HttpUrl
+                        .Builder()
+                        .scheme("http")
+                        .host(it.domain)
+                        .build(),
                 cookies = cookies,
             )
         }
@@ -118,20 +137,27 @@ class CloudflareInterceptor(private val client: OkHttpClient) : Interceptor {
         return createRequestWithCookies(request, cookies)
     }
 
-    private fun createRequestWithCookies(request: Request, cookies: List<Cookie>): Request {
-        val convertedForThisRequest = cookies.filter {
-            it.matches(request.url)
-        }
-        val existingCookies = Cookie.parseAll(
-            request.url,
-            request.headers,
-        )
-        val filteredExisting = existingCookies.filter { existing ->
-            convertedForThisRequest.none { converted -> converted.name == existing.name }
-        }
+    private fun createRequestWithCookies(
+        request: Request,
+        cookies: List<Cookie>,
+    ): Request {
+        val convertedForThisRequest =
+            cookies.filter {
+                it.matches(request.url)
+            }
+        val existingCookies =
+            Cookie.parseAll(
+                request.url,
+                request.headers,
+            )
+        val filteredExisting =
+            existingCookies.filter { existing ->
+                convertedForThisRequest.none { converted -> converted.name == existing.name }
+            }
 
         val newCookies = filteredExisting + convertedForThisRequest
-        return request.newBuilder()
+        return request
+            .newBuilder()
             .header("Cookie", newCookies.joinToString("; ") { "${it.name}=${it.value}" })
             .build()
     }

@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.lib.hlsproxy
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
 internal object HlsPlaylistRewriter {
-
     fun rewrite(
         playlist: String,
         sourceUrl: String,
@@ -18,6 +17,7 @@ internal object HlsPlaylistRewriter {
                     nextLineKind = HlsResourceKind.PLAYLIST
                     line
                 }
+
                 line.startsWith("#") -> {
                     val attributeKind = line.attributeResourceKind()
                     URI_ATTRIBUTE.replace(line) { match ->
@@ -30,38 +30,56 @@ internal object HlsPlaylistRewriter {
                         }
                     }
                 }
-                line.isBlank() -> line
+
+                line.isBlank() -> {
+                    line
+                }
+
                 else -> {
                     val uri = line.trim()
                     val absoluteUrl = baseUrl.resolve(uri)?.toString()
-                    val rewritten = when {
-                        absoluteUrl != null -> register(absoluteUrl, nextLineKind)
-                        uri.hasAbsoluteScheme() -> uri
-                        else -> throw IllegalArgumentException("Invalid HLS resource URL")
-                    }
+                    val rewritten =
+                        when {
+                            absoluteUrl != null -> register(absoluteUrl, nextLineKind)
+                            uri.hasAbsoluteScheme() -> uri
+                            else -> throw IllegalArgumentException("Invalid HLS resource URL")
+                        }
                     rewritten.also { nextLineKind = HlsResourceKind.SEGMENT }
                 }
             }
         }
     }
 
-    private fun String.attributeResourceKind(): HlsResourceKind {
-        return when {
-            startsWith("#EXT-X-KEY", ignoreCase = true) ||
-                startsWith("#EXT-X-SESSION-KEY", ignoreCase = true) -> HlsResourceKind.KEY
-            startsWith("#EXT-X-MAP", ignoreCase = true) -> HlsResourceKind.INITIALIZATION
-            startsWith("#EXT-X-PART", ignoreCase = true) -> HlsResourceKind.SEGMENT
-            startsWith("#EXT-X-PRELOAD-HINT", ignoreCase = true) -> {
-                if (contains("TYPE=MAP", ignoreCase = true)) {
-                    HlsResourceKind.INITIALIZATION
-                } else {
-                    HlsResourceKind.SEGMENT
-                }
+    private fun String.attributeResourceKind(): HlsResourceKind = when {
+        startsWith("#EXT-X-KEY", ignoreCase = true) ||
+            startsWith("#EXT-X-SESSION-KEY", ignoreCase = true) -> {
+            HlsResourceKind.KEY
+        }
+
+        startsWith("#EXT-X-MAP", ignoreCase = true) -> {
+            HlsResourceKind.INITIALIZATION
+        }
+
+        startsWith("#EXT-X-PART", ignoreCase = true) -> {
+            HlsResourceKind.SEGMENT
+        }
+
+        startsWith("#EXT-X-PRELOAD-HINT", ignoreCase = true) -> {
+            if (contains("TYPE=MAP", ignoreCase = true)) {
+                HlsResourceKind.INITIALIZATION
+            } else {
+                HlsResourceKind.SEGMENT
             }
-            startsWith("#EXT-X-MEDIA", ignoreCase = true) ||
-                startsWith("#EXT-X-I-FRAME-STREAM-INF", ignoreCase = true) ||
-                startsWith("#EXT-X-RENDITION-REPORT", ignoreCase = true) -> HlsResourceKind.PLAYLIST
-            else -> HlsResourceKind.OTHER
+        }
+
+        startsWith("#EXT-X-MEDIA", ignoreCase = true) ||
+            startsWith("#EXT-X-I-FRAME-STREAM-INF", ignoreCase = true) ||
+            startsWith("#EXT-X-RENDITION-REPORT", ignoreCase = true) -> {
+            HlsResourceKind.PLAYLIST
+        }
+
+        else -> {
+            HlsResourceKind.OTHER
         }
     }
 

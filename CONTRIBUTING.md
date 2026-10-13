@@ -1,5 +1,11 @@
 # Contributing
 
+> **Current build system:** use JDK 25, Android SDK 37 and `build.gradle.kts` with
+> the `video-extension` plugin. See [the current infrastructure guide](docs/infrastructure.md).
+> The older examples below describe site parsing; their Groovy build files and API 14
+> video constructors must be replaced with the API 17 forms in that guide.
+
+
 This guide have some instructions and tips on how to create a new Aniyomi extension. Please **read it carefully** if you're a new contributor or don't have any experience on the required languages and knowledges.
 
 This guide is not definitive and it's being updated over time. If you find any issue on it, feel free to report it through a [Meta Issue](https://github.com/aniyomiorg/aniyomi-extensions/issues/new?assignees=&labels=Meta+request&template=request_meta.yml) or fixing it directly by submitting a Pull Request.

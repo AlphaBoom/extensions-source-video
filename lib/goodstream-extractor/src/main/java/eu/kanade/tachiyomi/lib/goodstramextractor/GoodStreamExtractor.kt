@@ -6,9 +6,14 @@ import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 
-class GoodStreamExtractor(private val client: OkHttpClient, private val headers: Headers) {
-
-    fun videosFromUrl(url: String, name: String): List<Video> {
+class GoodStreamExtractor(
+    private val client: OkHttpClient,
+    private val headers: Headers,
+) {
+    fun videosFromUrl(
+        url: String,
+        name: String,
+    ): List<Video> {
         val doc = client.newCall(GET(url, headers)).execute().asJsoup()
         val videos = mutableListOf<Video>()
 
@@ -18,11 +23,11 @@ class GoodStreamExtractor(private val client: OkHttpClient, private val headers:
                 urlRegex.find(script.data())?.groupValues?.get(1)?.let { link ->
                     videos.add(
                         Video(
-                            url = link,
-                            quality = name,
                             videoUrl = link,
-                            headers = headers
-                        )
+                            videoTitle = name,
+                            headers = headers,
+                            initialized = true,
+                        ),
                     )
                 }
             }

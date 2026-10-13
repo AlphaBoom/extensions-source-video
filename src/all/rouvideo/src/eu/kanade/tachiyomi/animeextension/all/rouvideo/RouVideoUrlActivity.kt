@@ -12,7 +12,6 @@ import kotlin.system.exitProcess
  * and redirects them to the main Aniyomi process.
  */
 class RouVideoUrlActivity : Activity() {
-
     private val tag = javaClass.simpleName
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -22,11 +21,12 @@ class RouVideoUrlActivity : Activity() {
             val type = pathSegments[0]
             val item = pathSegments[1]
 
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.ANIMESEARCH"
-                putExtra("query", "$type:$item")
-                putExtra("filter", packageName)
-            }
+            val mainIntent =
+                Intent().apply {
+                    action = "eu.kanade.tachiyomi.ANIMESEARCH"
+                    putExtra("query", "$type:$item")
+                    putExtra("filter", packageName)
+                }
 
             try {
                 startActivity(mainIntent)

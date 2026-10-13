@@ -3,7 +3,9 @@ package eu.kanade.tachiyomi.lib.vidhideextractor
 import java.util.regex.Pattern
 import kotlin.math.pow
 
-class JsUnpacker(packedJS: String?) {
+class JsUnpacker(
+    packedJS: String?,
+) {
     private var packedJS: String? = null
 
     /**
@@ -72,12 +74,15 @@ class JsUnpacker(packedJS: String?) {
         return null
     }
 
-    private inner class Unbase(private val radix: Int) {
+    private inner class Unbase(
+        private val radix: Int,
+    ) {
         private val ALPHABET_62 = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
         private val ALPHABET_95 =
             " !\"#$%&\\'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
         private var alphabet: String? = null
         private var dictionary: HashMap<String, Int>? = null
+
         fun unbase(str: String): Int {
             var ret = 0
             if (alphabet == null) {
@@ -97,12 +102,15 @@ class JsUnpacker(packedJS: String?) {
                     radix < 62 -> {
                         alphabet = ALPHABET_62.substring(0, radix)
                     }
+
                     radix in 63..94 -> {
                         alphabet = ALPHABET_95.substring(0, radix)
                     }
+
                     radix == 62 -> {
                         alphabet = ALPHABET_62
                     }
+
                     radix == 95 -> {
                         alphabet = ALPHABET_95
                     }
@@ -115,13 +123,12 @@ class JsUnpacker(packedJS: String?) {
         }
     }
 
-    /**
+    /*
      * @param  packedJS javascript P.A.C.K.E.R. coded.
      */
     init {
         this.packedJS = packedJS
     }
-
 
     companion object {
         val c =
@@ -161,7 +168,7 @@ class JsUnpacker(packedJS: String?) {
                 0x65,
                 0x41,
                 0x64,
-                0x73
+                0x73,
             )
         val z =
             listOf(
@@ -183,7 +190,7 @@ class JsUnpacker(packedJS: String?) {
                 0x73,
                 0x2e,
                 0x41,
-                0x64
+                0x64,
             )
 
         fun String.load(): String? {

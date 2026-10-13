@@ -1,25 +1,14 @@
+import com.android.build.api.dsl.LibraryExtension
+
 plugins {
-    id("com.android.library")
+    id("lib-android")
 }
 
-android {
-    compileSdk = AndroidConfig.compileSdk
-    namespace = AndroidConfig.coreNamespace
-
-    defaultConfig {
-        minSdk = AndroidConfig.minSdk
-    }
-
-    sourceSets {
-        named("main") {
-            manifest.srcFile("AndroidManifest.xml")
-            res.setSrcDirs(listOf("res"))
-        }
-    }
-
-    libraryVariants.all {
-        generateBuildConfigProvider?.configure {
-            enabled = false
-        }
+extensions.configure<LibraryExtension> {
+    namespace = "eu.kanade.tachiyomi.lib.core"
+    sourceSets.getByName("main").apply {
+        manifest.srcFile("AndroidManifest.xml")
+        res.directories.clear()
+        res.directories.add("res")
     }
 }

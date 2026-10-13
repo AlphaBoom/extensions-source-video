@@ -25,13 +25,13 @@ class Intl(
     availableLanguages: Set<String>,
     private val baseLanguage: String,
     private val classLoader: ClassLoader,
-    private val createMessageFileName: (String) -> String = { createDefaultMessageFileName(it) }
+    private val createMessageFileName: (String) -> String = { createDefaultMessageFileName(it) },
 ) {
-
-    val chosenLanguage: String = when (language) {
-        in availableLanguages -> language
-        else -> baseLanguage
-    }
+    val chosenLanguage: String =
+        when (language) {
+            in availableLanguages -> language
+            else -> baseLanguage
+        }
 
     private val locale: Locale = Locale.forLanguageTag(chosenLanguage)
 
@@ -49,7 +49,9 @@ class Intl(
      * is also not present in English, the [key] surrounded by brackets will be returned.
      */
     @Suppress("InvalidBundleOrProperty")
-    operator fun get(@PropertyKey(resourceBundle = "i18n.messages") key: String): String = when {
+    operator fun get(
+        @PropertyKey(resourceBundle = "i18n.messages") key: String,
+    ): String = when {
         bundle.containsKey(key) -> bundle.getString(key)
         baseBundle.containsKey(key) -> baseBundle.getString(key)
         else -> "[$key]"
@@ -60,13 +62,15 @@ class Intl(
      * substituting the specified arguments, using the instance locale.
      */
     @Suppress("InvalidBundleOrProperty")
-    fun format(@PropertyKey(resourceBundle = "i18n.messages") key: String, vararg args: Any?) =
-        get(key).format(locale, *args)
+    fun format(
+        @PropertyKey(resourceBundle = "i18n.messages") key: String,
+        vararg args: Any?,
+    ) = get(key).format(locale, *args)
 
-    fun languageDisplayName(localeCode: String): String =
-        Locale.forLanguageTag(localeCode)
-            .getDisplayName(locale)
-            .replaceFirstChar { if (it.isLowerCase()) it.titlecase(locale) else it.toString() }
+    fun languageDisplayName(localeCode: String): String = Locale
+        .forLanguageTag(localeCode)
+        .getDisplayName(locale)
+        .replaceFirstChar { if (it.isLowerCase()) it.titlecase(locale) else it.toString() }
 
     /**
      * Creates a [PropertyResourceBundle] instance from the language specified.

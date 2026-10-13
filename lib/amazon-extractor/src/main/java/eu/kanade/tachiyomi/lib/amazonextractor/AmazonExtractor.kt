@@ -6,11 +6,15 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.OkHttpClient
 
-class AmazonExtractor(private val client: OkHttpClient) {
-
+class AmazonExtractor(
+    private val client: OkHttpClient,
+) {
     private val playlistUtils by lazy { PlaylistUtils(client) }
 
-    fun videosFromUrl(url: String, prefix: String = ""): List<Video> {
+    fun videosFromUrl(
+        url: String,
+        prefix: String = "",
+    ): List<Video> {
         if (url.contains("disable", true)) return emptyList()
 
         val document = client.newCall(GET(url)).execute().asJsoup()
@@ -28,14 +32,19 @@ class AmazonExtractor(private val client: OkHttpClient) {
 
         val amazonApi = client.newCall(GET(amazonApiUrl)).execute().asJsoup()
 
-        val videoUrl = amazonApi.toString().substringAfter("\"FOLDER\":").substringAfter("tempLink\":\"").substringBefore("\"")
+        val videoUrl =
+            amazonApi
+                .toString()
+                .substringAfter("\"FOLDER\":")
+                .substringAfter("tempLink\":\"")
+                .substringBefore("\"")
 
         val serverName = if (videoUrl.contains("&ext=es")) "AmazonES" else "Amazon"
 
         return if (videoUrl.contains(".m3u8")) {
             playlistUtils.extractFromHls(videoUrl, videoNameGen = { "${prefix}$serverName:$it" })
         } else {
-            listOf(Video(videoUrl, "${prefix}$serverName", videoUrl))
+            listOf(Video(videoUrl = videoUrl, videoTitle = "${prefix}$serverName", initialized = true))
         }
     }
 }

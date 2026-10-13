@@ -25,7 +25,9 @@ class WebViewResolver(
     private val context: Application by injectLazy()
     private val handler by lazy { Handler(Looper.getMainLooper()) }
 
-    class JsInterface(private val latch: CountDownLatch) {
+    class JsInterface(
+        private val latch: CountDownLatch,
+    ) {
         var result: String? = null
 
         @JavascriptInterface
@@ -56,19 +58,20 @@ class WebViewResolver(
             }
 
             webview.addJavascriptInterface(jsi, interfaceName)
-            webview.webViewClient = object : WebViewClient() {
-                override fun shouldInterceptRequest(
-                    view: WebView?,
-                    request: WebResourceRequest?
-                ): WebResourceResponse? {
-                    if (request?.url.toString().equals(embedUrl, true)) {
-                        return patchBody(request!!.url.toString(), interfaceName)
-                            ?: super.shouldInterceptRequest(view, request)
-                    }
+            webview.webViewClient =
+                object : WebViewClient() {
+                    override fun shouldInterceptRequest(
+                        view: WebView?,
+                        request: WebResourceRequest?,
+                    ): WebResourceResponse? {
+                        if (request?.url.toString().equals(embedUrl, true)) {
+                            return patchBody(request!!.url.toString(), interfaceName)
+                                ?: super.shouldInterceptRequest(view, request)
+                        }
 
-                    return super.shouldInterceptRequest(view, request)
+                        return super.shouldInterceptRequest(view, request)
+                    }
                 }
-            }
 
             webView?.loadUrl(embedUrl)
         }
@@ -93,13 +96,17 @@ class WebViewResolver(
         return List(length) { charPool.random() }.joinToString("")
     }
 
-    private fun patchBody(url: String, interfaceName: String): WebResourceResponse? {
+    private fun patchBody(
+        url: String,
+        interfaceName: String,
+    ): WebResourceResponse? {
         val html = client.newCall(GET(url, globalHeaders)).execute().asJsoup()
 
         val oldFunc = randomString()
-        val script = html.createElement("script").apply {
-            appendText(
-                """
+        val script =
+            html.createElement("script").apply {
+                appendText(
+                    """
                     const $oldFunc = Function;
                     window.Function = function (...args) {
                       if (args.length == 1) {
@@ -107,9 +114,9 @@ class WebViewResolver(
                       }
                       return $oldFunc(...args);
                     };
-                """.trimIndent()
-            )
-        }
+                    """.trimIndent(),
+                )
+            }
 
         html.body().insertChildren(0, script)
 

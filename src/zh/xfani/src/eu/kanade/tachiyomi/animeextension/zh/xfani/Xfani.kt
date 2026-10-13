@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
 import eu.kanade.tachiyomi.animesource.model.AnimeFilter
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
+import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
@@ -52,7 +53,9 @@ enum class FilterUpdateState {
     FAILED,
 }
 
-class Xfani : AnimeHttpSource(), ConfigurableAnimeSource {
+class Xfani :
+    AnimeHttpSource(),
+    ConfigurableAnimeSource {
     override val baseUrl: String
         get() = "https://anime.xifanacg.com"
     override val lang: String
@@ -61,6 +64,8 @@ class Xfani : AnimeHttpSource(), ConfigurableAnimeSource {
         get() = "稀饭动漫"
     override val supportsLatest: Boolean
         get() = true
+
+    override val supportsRelatedAnime = false
 
     private val json by injectLazy<Json>()
     private val preferences: SharedPreferences by lazy {
@@ -74,17 +79,25 @@ class Xfani : AnimeHttpSource(), ConfigurableAnimeSource {
             @SuppressLint("CustomX509TrustManager")
             object : X509TrustManager {
                 override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
-                override fun checkClientTrusted(certs: Array<X509Certificate>, authType: String) =
-                    Unit
 
-                override fun checkServerTrusted(certs: Array<X509Certificate>, authType: String) =
-                    Unit
+                override fun checkClientTrusted(
+                    certs: Array<X509Certificate>,
+                    authType: String,
+                ) = Unit
+
+                override fun checkServerTrusted(
+                    certs: Array<X509Certificate>,
+                    authType: String,
+                ) = Unit
             }
 
-        val insecureSocketFactory = SSLContext.getInstance("TLSv1.2").apply {
-            val trustAllCerts = arrayOf<TrustManager>(naiveTrustManager)
-            init(null, trustAllCerts, SecureRandom())
-        }.socketFactory
+        val insecureSocketFactory =
+            SSLContext
+                .getInstance("TLSv1.2")
+                .apply {
+                    val trustAllCerts = arrayOf<TrustManager>(naiveTrustManager)
+                    init(null, trustAllCerts, SecureRandom())
+                }.socketFactory
 
         sslSocketFactory(insecureSocketFactory, naiveTrustManager)
         hostnameVerifier { _, _ -> true }
@@ -122,80 +135,106 @@ class Xfani : AnimeHttpSource(), ConfigurableAnimeSource {
         return SAnime.create().apply {
             description = doc.select("#height_limit.text").text()
             title = doc.select(".slide-info-title").text()
-            author = doc.select(".slide-info:contains(导演 :)").text().removePrefix("导演 :")
-                .removeSuffix(",")
-            artist = doc.select(".slide-info:contains(演员 :)").text().removePrefix("演员 :")
-                .removeSuffix(",")
-            genre = doc.select(".slide-info:contains(类型 :)").text().removePrefix("类型 :")
-                .removeSuffix(",").replace(",", ", ")
+            author =
+                doc
+                    .select(".slide-info:contains(导演 :)")
+                    .text()
+                    .removePrefix("导演 :")
+                    .removeSuffix(",")
+            artist =
+                doc
+                    .select(".slide-info:contains(演员 :)")
+                    .text()
+                    .removePrefix("演员 :")
+                    .removeSuffix(",")
+            genre =
+                doc
+                    .select(".slide-info:contains(类型 :)")
+                    .text()
+                    .removePrefix("类型 :")
+                    .removeSuffix(",")
+                    .replace(",", ", ")
         }
     }
 
     override fun episodeListParse(response: Response): List<SEpisode> {
         val jsoup = response.asJsoup()
         val result = jsoup.select("ul.anthology-list-play.size")
-        val episodeList = if (result.size > selectedVideoSource) {
-            result[selectedVideoSource]
-        } else {
-            result[0]
-        }.select("li > a")
-        return episodeList.map {
-            SEpisode.create().apply {
-                name = it.text()
-                url = it.attr("href")
-            }
-        }.reversed()
+        val episodeList =
+            if (result.size > selectedVideoSource) {
+                result[selectedVideoSource]
+            } else {
+                result[0]
+            }.select("li > a")
+        return episodeList
+            .map {
+                SEpisode.create().apply {
+                    name = it.text()
+                    url = it.attr("href")
+                }
+            }.reversed()
     }
 
-    override fun videoListParse(response: Response): List<Video> {
+    override fun hosterListParse(response: Response): List<Hoster> {
         val requestUrl = response.request.url
         val currentPath = requestUrl.encodedPath
-        val currentEpisodePathName = response.request.url.pathSegments.last()
+        val currentEpisodePathName =
+            response.request.url.pathSegments
+                .last()
         val document = response.asJsoup()
         val videoUrl = findVideoUrl(document)
         val allEpisodeElements =
-            document.select(".player-anthology .anthology-list .anthology-list-box")
+            document
+                .select(".player-anthology .anthology-list .anthology-list-box")
                 .map { element ->
                     element.select(".anthology-list-play li a")
                 }
-        val currentEpisodeName = allEpisodeElements.firstNotNullOfOrNull { elements ->
-            elements.firstOrNull { it.attr("href") == currentPath }?.select("span")?.text()
-        }
+        val currentEpisodeName =
+            allEpisodeElements.firstNotNullOfOrNull { elements ->
+                elements.firstOrNull { it.attr("href") == currentPath }?.select("span")?.text()
+            }
         val targetEpisodeNumber =
             currentEpisodeName?.let { numberRegex.find(it)?.value?.toIntOrNull() } ?: -1
-        val sourceList = allEpisodeElements.map { elements ->
-            elements.findSourceOrNull { name, _ -> name == currentEpisodeName }
-                ?: elements.findSourceOrNull { name, _ -> numberRegex.find(name)?.value?.toIntOrNull() == targetEpisodeNumber }
-                ?: elements.findSourceOrNull { _, url -> url.endsWith(currentEpisodePathName) }
-        }
-        val sourceNameList = document.select(".anthology-tab .swiper-wrapper a").map {
-            it.ownText().trim()
-        }
-        return sourceList.zip(sourceNameList) { source, name ->
-            if (source == null) {
-                Video("", "", null)
-            } else if (source.second.endsWith(currentPath)) {
-                Video("$baseUrl${source.second}", "$name-${source.first}", videoUrl = videoUrl)
-            } else {
-                Video("$baseUrl${source.second}", "$name-${source.first}", videoUrl = null)
+        val sourceList =
+            allEpisodeElements.map { elements ->
+                elements.findSourceOrNull { name, _ -> name == currentEpisodeName }
+                    ?: elements.findSourceOrNull { name, _ -> numberRegex.find(name)?.value?.toIntOrNull() == targetEpisodeNumber }
+                    ?: elements.findSourceOrNull { _, url -> url.endsWith(currentEpisodePathName) }
             }
-        }.filter { it.quality.isNotEmpty() }.sortedByDescending { it.videoUrl != null }
+        val sourceNameList =
+            document.select(".anthology-tab .swiper-wrapper a").map {
+                it.ownText().trim()
+            }
+        return sourceList
+            .zip(sourceNameList)
+            .mapNotNull { (source, name) ->
+                if (source == null) return@mapNotNull null
+                val title = "$name-${source.first}"
+                val selected = source.second.endsWith(currentPath)
+                Hoster(
+                    hosterUrl = "$baseUrl${source.second}",
+                    hosterName = title,
+                    videoList = if (selected) listOf(Video(videoUrl = videoUrl, videoTitle = title, initialized = true)) else null,
+                    lazy = !selected,
+                )
+            }.sortedByDescending { it.videoList != null }
     }
 
-    private fun Elements.findSourceOrNull(predicate: (name: String, url: String) -> Boolean): Pair<String, String>? {
-        return firstNotNullOfOrNull {
-            val name = it.selectFirst("span")?.text() ?: ""
-            val url = it.attr("href")
-            if (predicate(name, url)) {
-                name to url
-            } else {
-                null
-            }
-        }
-    }
+    override fun videoListParse(
+        response: Response,
+        hoster: Hoster,
+    ): List<Video> = listOf(
+        Video(videoUrl = findVideoUrl(response.asJsoup()), videoTitle = hoster.hosterName, initialized = true),
+    )
 
-    override fun videoUrlParse(response: Response): String {
-        return findVideoUrl(response.asJsoup())
+    private fun Elements.findSourceOrNull(predicate: (name: String, url: String) -> Boolean): Pair<String, String>? = firstNotNullOfOrNull {
+        val name = it.selectFirst("span")?.text() ?: ""
+        val url = it.attr("href")
+        if (predicate(name, url)) {
+            name to url
+        } else {
+            null
+        }
     }
 
     private fun findVideoUrl(document: Document): String {
@@ -204,32 +243,27 @@ class Xfani : AnimeHttpSource(), ConfigurableAnimeSource {
         return info.jsonObject["url"]!!.jsonPrimitive.content
     }
 
-    override fun latestUpdatesParse(response: Response): AnimesPage {
-        return vodListToAnimePageList(response)
-    }
+    override fun latestUpdatesParse(response: Response): AnimesPage = vodListToAnimePageList(response)
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        searchAnimeRequest(page, "", AnimeFilterList())
+    override fun latestUpdatesRequest(page: Int): Request = searchAnimeRequest(page, "", AnimeFilterList())
 
-    override fun popularAnimeParse(response: Response): AnimesPage {
-        return vodListToAnimePageList(response)
-    }
+    override fun popularAnimeParse(response: Response): AnimesPage = vodListToAnimePageList(response)
 
-    override fun popularAnimeRequest(page: Int): Request =
-        searchAnimeRequest(page, "", AnimeFilterList(SortFilter().apply { state = 1 }))
+    override fun popularAnimeRequest(page: Int): Request = searchAnimeRequest(page, "", AnimeFilterList(SortFilter().apply { state = 1 }))
 
     private fun vodListToAnimePageList(response: Response): AnimesPage {
         val vodResponse = json.decodeFromString<VodResponse>(response.body.string())
-        val animeList = vodResponse.list.map { info ->
-            SAnime.create().apply {
-                url = "/bangumi/${info.vodId}.html"
-                thumbnail_url = info.vodPicThumb.takeIf { it.startsWith("http", ignoreCase = true) }
-                    ?: info.vodPic
-                title = info.vodName
-                author = info.vodActor.replace(",,,", "")
-                description = info.vodBlurb
+        val animeList =
+            vodResponse.list.map { info ->
+                SAnime.create().apply {
+                    url = "/bangumi/${info.vodId}.html"
+                    thumbnail_url = info.vodPicThumb.takeIf { it.startsWith("http", ignoreCase = true) }
+                        ?: info.vodPic
+                    title = info.vodName
+                    author = info.vodActor.replace(",,,", "")
+                    description = info.vodBlurb
+                }
             }
-        }
         return AnimesPage(
             animeList,
             animeList.isNotEmpty() && vodResponse.page * vodResponse.limit < vodResponse.total,
@@ -237,7 +271,10 @@ class Xfani : AnimeHttpSource(), ConfigurableAnimeSource {
     }
 
     override fun searchAnimeParse(response: Response): AnimesPage {
-        if (response.request.url.toString().contains("api/vod")) {
+        if (response.request.url
+                .toString()
+                .contains("api/vod")
+        ) {
             return vodListToAnimePageList(response)
         }
         val jsoup = response.asJsoup()
@@ -245,14 +282,15 @@ class Xfani : AnimeHttpSource(), ConfigurableAnimeSource {
             throw Exception("搜索需要验证码，请在 WebView 中搜索并完成验证后重试。")
         }
         val items = jsoup.select("div.search-list")
-        val animeList = items.map { item ->
-            SAnime.create().apply {
-                title = item.select("div.detail-info > a").text()
-                url = item.select("div.detail-info > a").attr("href")
-                thumbnail_url =
-                    item.select("div.detail-pic img[data-src]").attr("data-src")
+        val animeList =
+            items.map { item ->
+                SAnime.create().apply {
+                    title = item.select("div.detail-info > a").text()
+                    url = item.select("div.detail-info > a").attr("href")
+                    thumbnail_url =
+                        item.select("div.detail-pic img[data-src]").attr("data-src")
+                }
             }
-        }
         val tip = jsoup.select("div.pages div.page-tip").text()
         return AnimesPage(animeList, tip.isNotEmpty() && hasMorePage(tip))
     }
@@ -266,15 +304,17 @@ class Xfani : AnimeHttpSource(), ConfigurableAnimeSource {
     @OptIn(DelicateCoroutinesApi::class)
     private fun updateFilter() {
         filterState = FilterUpdateState.UPDATING
-        val handler = CoroutineExceptionHandler { _, _ ->
-            filterState = FilterUpdateState.FAILED
-        }
+        val handler =
+            CoroutineExceptionHandler { _, _ ->
+                filterState = FilterUpdateState.FAILED
+            }
         GlobalScope.launch(Dispatchers.IO + handler) {
             val jsoup = client.newCall(GET("$baseUrl/show/1/html")).awaitSuccess().asJsoup()
             // update class and year filter type
             val classList = jsoup.select("li[data-type=class]").eachAttr("data-val")
             val yearList = jsoup.select("li[data-type=year]").eachAttr("data-val")
-            preferences.edit()
+            preferences
+                .edit()
                 .putString(PREF_KEY_FILTER_CLASS, classList.joinToString())
                 .putString(PREF_KEY_FILTER_YEAR, yearList.joinToString())
                 .apply()
@@ -297,60 +337,92 @@ class Xfani : AnimeHttpSource(), ConfigurableAnimeSource {
         return block(tags.toTypedArray())
     }
 
-    override fun getFilterList(): AnimeFilterList {
-        return AnimeFilterList(
-            listOfNotNull(
-                AnimeFilter.Header("以下筛选对搜索结果无效"),
-                TypeFilter(),
-                preferences.createTagFilter(PREF_KEY_FILTER_CLASS) {
-                    if (it.isEmpty()) {
-                        ClassFilter()
-                    } else {
-                        ClassFilter(it)
-                    }
-                },
-                preferences.createTagFilter(PREF_KEY_FILTER_YEAR) {
-                    if (it.isEmpty()) {
-                        null
-                    } else {
-                        YearFilter(it)
-                    }
-                },
-                VersionFilter(),
-                LetterFilter(),
-                SortFilter(),
-            ),
-        )
-    }
+    override fun getFilterList(): AnimeFilterList = AnimeFilterList(
+        listOfNotNull(
+            AnimeFilter.Header("以下筛选对搜索结果无效"),
+            TypeFilter(),
+            preferences.createTagFilter(PREF_KEY_FILTER_CLASS) {
+                if (it.isEmpty()) {
+                    ClassFilter()
+                } else {
+                    ClassFilter(it)
+                }
+            },
+            preferences.createTagFilter(PREF_KEY_FILTER_YEAR) {
+                if (it.isEmpty()) {
+                    null
+                } else {
+                    YearFilter(it)
+                }
+            },
+            VersionFilter(),
+            LetterFilter(),
+            SortFilter(),
+        ),
+    )
 
-    private fun doSearch(page: Int, query: String): Request {
+    private fun doSearch(
+        page: Int,
+        query: String,
+    ): Request {
         val url = baseUrl.toHttpUrl().newBuilder()
         if (page <= 1) {
             url.addPathSegment("search.html").addQueryParameter("wd", query)
         } else {
-            url.addPathSegments("search/wd/").addPathSegment(query)
+            url
+                .addPathSegments("search/wd/")
+                .addPathSegment(query)
                 .addPathSegments("page/$page.html")
         }
         return GET(url.build())
     }
 
-    override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request {
+    override fun searchAnimeRequest(
+        page: Int,
+        query: String,
+        filters: AnimeFilterList,
+    ): Request {
         if (query.isNotBlank()) {
             return doSearch(page, query)
         }
-        val url = baseUrl.toHttpUrl().newBuilder().addPathSegments("index.php/ds_api/vod").build()
+        val url =
+            baseUrl
+                .toHttpUrl()
+                .newBuilder()
+                .addPathSegments("index.php/ds_api/vod")
+                .build()
         val formBody =
-            MultipartBody.Builder().setType(MultipartBody.FORM)
+            MultipartBody
+                .Builder()
+                .setType(MultipartBody.FORM)
                 .addFormDataPart("page", "$page")
                 .addFormDataPart("level", "0")
         filters.forEach { filter ->
             when (filter) {
-                is TypeFilter -> formBody.addFormDataPart("type", filter.selected)
-                is ClassFilter -> formBody.addFormDataPart("class", filter.selected)
-                is YearFilter -> formBody.addFormDataPart("year", filter.selected)
-                is VersionFilter -> formBody.addFormDataPart("version", filter.selected)
-                is LetterFilter -> formBody.addFormDataPart("letter", filter.selected)
-                is SortFilter -> formBody.addFormDataPart("by", filter.selected)
+                is TypeFilter -> {
+                    formBody.addFormDataPart("type", filter.selected)
+                }
+
+                is ClassFilter -> {
+                    formBody.addFormDataPart("class", filter.selected)
+                }
+
+                is YearFilter -> {
+                    formBody.addFormDataPart("year", filter.selected)
+                }
+
+                is VersionFilter -> {
+                    formBody.addFormDataPart("version", filter.selected)
+                }
+
+                is LetterFilter -> {
+                    formBody.addFormDataPart("letter", filter.selected)
+                }
+
+                is SortFilter -> {
+                    formBody.addFormDataPart("by", filter.selected)
+                }
+
                 else -> {}
             }
         }

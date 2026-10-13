@@ -43,12 +43,16 @@ object Deobfuscator {
         return evaluatedString.toString()
     }
 
-    private fun getMatchingBracketIndex(openingIndex: Int, inputString: String): Int {
+    private fun getMatchingBracketIndex(
+        openingIndex: Int,
+        inputString: String,
+    ): Int {
         val openingBracket = inputString[openingIndex]
-        val closingBracket = when (openingBracket) {
-            '[' -> ']'
-            else -> ')'
-        }
+        val closingBracket =
+            when (openingBracket) {
+                '[' -> ']'
+                else -> ')'
+            }
         var counter = 0
         for (idx in openingIndex until inputString.length) {
             if (inputString[idx] == openingBracket) counter++

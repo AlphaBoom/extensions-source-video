@@ -1,4 +1,22 @@
-apply(from = "repositories.gradle.kts")
+pluginManagement {
+    includeBuild("gradle/build-logic")
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+        maven(url = "https://jitpack.io")
+    }
+}
+
+rootProject.name = "extensions-source-video"
 
 include(":core")
 
@@ -11,7 +29,7 @@ File(rootDir, "lib-multisrc").eachDir { include("lib-multisrc:${it.name}") }
 if (System.getenv("CI") != "true") {
     // Local development (full project build)
 
-    /**
+    /*
      * Add or remove modules to load as needed for local development here.
      */
     loadAllIndividualExtensions()
@@ -46,21 +64,26 @@ fun loadAllIndividualExtensions() {
         }
     }
 }
-fun loadIndividualExtension(lang: String, name: String) {
+
+fun loadIndividualExtension(
+    lang: String,
+    name: String,
+) {
     include("src:$lang:$name")
 }
 
-fun File.getChunk(chunk: Int, chunkSize: Int): List<File>? {
-    return listFiles()
-        // Lang folder
-        ?.filter { it.isDirectory }
-        // Extension subfolders
-        ?.mapNotNull { dir -> dir.listFiles()?.filter { it.isDirectory } }
-        ?.flatten()
-        ?.sortedBy { it.name }
-        ?.chunked(chunkSize)
-        ?.get(chunk)
-}
+fun File.getChunk(
+    chunk: Int,
+    chunkSize: Int,
+): List<File>? = listFiles()
+    // Lang folder
+    ?.filter { it.isDirectory }
+    // Extension subfolders
+    ?.mapNotNull { dir -> dir.listFiles()?.filter { it.isDirectory } }
+    ?.flatten()
+    ?.sortedBy { it.name }
+    ?.chunked(chunkSize)
+    ?.get(chunk)
 
 fun File.eachDir(block: (File) -> Unit) {
     val files = listFiles() ?: return
@@ -70,4 +93,3 @@ fun File.eachDir(block: (File) -> Unit) {
         }
     }
 }
-

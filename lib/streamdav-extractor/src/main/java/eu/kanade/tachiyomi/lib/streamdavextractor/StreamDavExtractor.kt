@@ -5,13 +5,18 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.OkHttpClient
 
-class StreamDavExtractor(private val client: OkHttpClient) {
-    fun videosFromUrl(url: String, prefix: String = ""): List<Video> {
+class StreamDavExtractor(
+    private val client: OkHttpClient,
+) {
+    fun videosFromUrl(
+        url: String,
+        prefix: String = "",
+    ): List<Video> {
         val document = client.newCall(GET(url)).execute().asJsoup()
         return document.select("source").map {
             val videoUrl = it.attr("src")
             val quality = it.attr("label")
-            Video(url, "${prefix}StreamDav - ($quality)", videoUrl)
+            Video(videoUrl = videoUrl, videoTitle = "${prefix}StreamDav - ($quality)", initialized = true)
         }
     }
 }

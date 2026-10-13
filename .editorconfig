@@ -1,7 +1,6 @@
-# Editor configuration, see https://editorconfig.org
 root = true
 
-[*.kt]
+[*.{kt,kts}]
 charset = utf-8
 end_of_line = lf
 indent_size = 4
@@ -10,6 +9,12 @@ insert_final_newline = true
 trim_trailing_whitespace = true
 ij_kotlin_allow_trailing_comma = true
 ij_kotlin_allow_trailing_comma_on_call_site = true
-ktlint_experimental = enabled
-ktlint_experimental_argument-list-wrapping = disabled # Doesn't play well with Android Studio
-ktlint_experimental_comment-wrapping = disabled
+max_line_length = off
+ktlint_standard_function-naming_ignore_when_annotated_with = Composable
+ktlint_standard_property-naming = disabled
+ktlint_standard_function-naming = disabled
+ktlint_standard_backing-property-naming = disabled
+ktlint_standard_class-naming = disabled
+
+ktlint_function_signature_body_expression_wrapping = default
+ktlint_standard_discouraged-comment-location = disabled

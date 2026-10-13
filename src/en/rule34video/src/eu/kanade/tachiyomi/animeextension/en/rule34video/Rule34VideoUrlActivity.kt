@@ -8,17 +8,17 @@ import android.util.Log
 import kotlin.system.exitProcess
 
 class Rule34VideoUrlActivity : Activity() {
-
     private val tag = "Rule34VideoUrlActivity"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val mainIntent = Intent().apply {
-            action = "eu.kanade.tachiyomi.ANIMESEARCH"
-            putExtra("query", intent.data.toString())
-            putExtra("filter", packageName)
-        }
+        val mainIntent =
+            Intent().apply {
+                action = "eu.kanade.tachiyomi.ANIMESEARCH"
+                putExtra("query", intent.data.toString())
+                putExtra("filter", packageName)
+            }
 
         try {
             startActivity(mainIntent)

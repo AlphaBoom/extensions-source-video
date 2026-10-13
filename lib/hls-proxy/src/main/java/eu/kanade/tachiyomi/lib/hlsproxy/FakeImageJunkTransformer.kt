@@ -10,12 +10,12 @@ import java.io.ByteArrayOutputStream
  * AutoDetector and adapted for this proxy's transformer API.
  */
 object FakeImageJunkTransformer : HlsBodyTransformer {
+    override fun supports(context: HlsResourceContext): Boolean = context.kind == HlsResourceKind.SEGMENT
 
-    override fun supports(context: HlsResourceContext): Boolean {
-        return context.kind == HlsResourceKind.SEGMENT
-    }
-
-    override fun transform(context: HlsResourceContext, body: ByteArray): ByteArray {
+    override fun transform(
+        context: HlsResourceContext,
+        body: ByteArray,
+    ): ByteArray {
         val ranges = FakeImageJunkDetector.detect(body)
         if (ranges.isEmpty()) return body
 
@@ -36,7 +36,6 @@ object FakeImageJunkTransformer : HlsBodyTransformer {
 }
 
 private object FakeImageJunkDetector {
-
     fun detect(data: ByteArray): List<IntRange> {
         if (data.size < 3) return emptyList()
 
@@ -48,8 +47,9 @@ private object FakeImageJunkDetector {
                 continue
             }
 
-            val end = findVideoBoundary(data, index + 1)
-                ?: minOf(data.size, index + DEFAULT_JUNK_BLOCK_SIZE)
+            val end =
+                findVideoBoundary(data, index + 1)
+                    ?: minOf(data.size, index + DEFAULT_JUNK_BLOCK_SIZE)
             if (end > index) {
                 ranges += index until end
                 index = end
@@ -60,7 +60,10 @@ private object FakeImageJunkDetector {
         return ranges.merge()
     }
 
-    private fun findVideoBoundary(data: ByteArray, start: Int): Int? {
+    private fun findVideoBoundary(
+        data: ByteArray,
+        start: Int,
+    ): Int? {
         val end = minOf(data.size, start + SEARCH_LIMIT)
         for (index in start until end) {
             when {
@@ -73,19 +76,22 @@ private object FakeImageJunkDetector {
     }
 
     private fun ByteArray.hasImageMagicAt(index: Int): Boolean {
-        val jpeg = index + 2 < size &&
-            this[index] == 0xff.toByte() &&
-            this[index + 1] == 0xd8.toByte() &&
-            this[index + 2] == 0xff.toByte()
-        val png = index + 3 < size &&
-            this[index] == 0x89.toByte() &&
-            this[index + 1] == 0x50.toByte() &&
-            this[index + 2] == 0x4e.toByte() &&
-            this[index + 3] == 0x47.toByte()
-        val gif = index + 2 < size &&
-            this[index] == 0x47.toByte() &&
-            this[index + 1] == 0x49.toByte() &&
-            this[index + 2] == 0x46.toByte()
+        val jpeg =
+            index + 2 < size &&
+                this[index] == 0xff.toByte() &&
+                this[index + 1] == 0xd8.toByte() &&
+                this[index + 2] == 0xff.toByte()
+        val png =
+            index + 3 < size &&
+                this[index] == 0x89.toByte() &&
+                this[index + 1] == 0x50.toByte() &&
+                this[index + 2] == 0x4e.toByte() &&
+                this[index + 3] == 0x47.toByte()
+        val gif =
+            index + 2 < size &&
+                this[index] == 0x47.toByte() &&
+                this[index + 1] == 0x49.toByte() &&
+                this[index + 2] == 0x46.toByte()
         return jpeg || png || gif
     }
 
@@ -102,25 +108,21 @@ private object FakeImageJunkDetector {
         return matches >= 2
     }
 
-    private fun ByteArray.isMp4At(start: Int): Boolean {
-        return start + 7 < size &&
-            this[start + 4] == 'f'.code.toByte() &&
-            this[start + 5] == 't'.code.toByte() &&
-            this[start + 6] == 'y'.code.toByte() &&
-            this[start + 7] == 'p'.code.toByte()
-    }
+    private fun ByteArray.isMp4At(start: Int): Boolean = start + 7 < size &&
+        this[start + 4] == 'f'.code.toByte() &&
+        this[start + 5] == 't'.code.toByte() &&
+        this[start + 6] == 'y'.code.toByte() &&
+        this[start + 7] == 'p'.code.toByte()
 
-    private fun ByteArray.isAviAt(start: Int): Boolean {
-        return start + 11 < size &&
-            this[start] == 'R'.code.toByte() &&
-            this[start + 1] == 'I'.code.toByte() &&
-            this[start + 2] == 'F'.code.toByte() &&
-            this[start + 3] == 'F'.code.toByte() &&
-            this[start + 8] == 'A'.code.toByte() &&
-            this[start + 9] == 'V'.code.toByte() &&
-            this[start + 10] == 'I'.code.toByte() &&
-            this[start + 11] == ' '.code.toByte()
-    }
+    private fun ByteArray.isAviAt(start: Int): Boolean = start + 11 < size &&
+        this[start] == 'R'.code.toByte() &&
+        this[start + 1] == 'I'.code.toByte() &&
+        this[start + 2] == 'F'.code.toByte() &&
+        this[start + 3] == 'F'.code.toByte() &&
+        this[start + 8] == 'A'.code.toByte() &&
+        this[start + 9] == 'V'.code.toByte() &&
+        this[start + 10] == 'I'.code.toByte() &&
+        this[start + 11] == ' '.code.toByte()
 
     private fun List<IntRange>.merge(): List<IntRange> {
         if (isEmpty()) return emptyList()

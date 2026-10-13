@@ -20,12 +20,25 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 
-class UniversalExtractor(private val client: OkHttpClient) {
+class UniversalExtractor(
+    private val client: OkHttpClient,
+) {
     private val context: Application by injectLazy()
     private val handler by lazy { Handler(Looper.getMainLooper()) }
+
     @SuppressLint("SetJavaScriptEnabled")
-    fun videosFromUrl(origRequestUrl: String, origRequestHeader: Headers, customQuality: String? = null, prefix: String = ""): List<Video> {
-        val host = origRequestUrl.toHttpUrl().host.substringBefore(".").proper()
+    fun videosFromUrl(
+        origRequestUrl: String,
+        origRequestHeader: Headers,
+        customQuality: String? = null,
+        prefix: String = "",
+    ): List<Video> {
+        val host =
+            origRequestUrl
+                .toHttpUrl()
+                .host
+                .substringBefore(".")
+                .proper()
         val latch = CountDownLatch(1)
         var webView: WebView? = null
         var resultUrl = ""
@@ -43,19 +56,20 @@ class UniversalExtractor(private val client: OkHttpClient) {
                 loadWithOverviewMode = false
                 userAgentString = origRequestHeader["User-Agent"]
             }
-            newView.webViewClient = object : WebViewClient() {
-                override fun shouldInterceptRequest(
-                    view: WebView,
-                    request: WebResourceRequest,
-                ): WebResourceResponse? {
-                    val url = request.url.toString()
-                    if (VIDEO_REGEX.containsMatchIn(url)) {
-                        resultUrl = url
-                        latch.countDown()
+            newView.webViewClient =
+                object : WebViewClient() {
+                    override fun shouldInterceptRequest(
+                        view: WebView,
+                        request: WebResourceRequest,
+                    ): WebResourceResponse? {
+                        val url = request.url.toString()
+                        if (VIDEO_REGEX.containsMatchIn(url)) {
+                            resultUrl = url
+                            latch.countDown()
+                        }
+                        return super.shouldInterceptRequest(view, request)
                     }
-                    return super.shouldInterceptRequest(view, request)
                 }
-            }
 
             webView?.loadUrl(origRequestUrl, headers)
         }
@@ -92,28 +106,36 @@ class UniversalExtractor(private val client: OkHttpClient) {
                 Log.d("UniversalExtractor", "m3u8 URL: $resultUrl")
                 playlistUtils.extractFromHls(resultUrl, origRequestUrl, videoNameGen = { "$prefix - $host: ${stnQuality(it)}" })
             }
+
             "mpd" in resultUrl -> {
                 Log.d("UniversalExtractor", "mpd URL: $resultUrl")
                 playlistUtils.extractFromDash(resultUrl, { it -> "$prefix - $host: $it" }, referer = origRequestUrl)
             }
+
             "mp4" in resultUrl -> {
                 Log.d("UniversalExtractor", "mp4 URL: $resultUrl")
-                Video(resultUrl, "$prefix - $host: ${customQuality ?: "Mirror"}", resultUrl, origRequestHeader.newBuilder().add("referer", origRequestUrl).build()).let(::listOf)
+                Video(videoUrl = resultUrl, videoTitle = "$prefix - $host: ${customQuality ?: "Mirror"}", headers = origRequestHeader.newBuilder().add("referer", origRequestUrl).build(), initialized = true).let(::listOf)
             }
-            else -> emptyList()
+
+            else -> {
+                emptyList()
+            }
         }
     }
 
     private fun stnQuality(quality: String): String {
         val intQuality = quality.trim().toInt()
         val standardQualities = listOf(144, 240, 360, 480, 720, 1080)
-        val result =  standardQualities.minByOrNull { abs(it - intQuality) } ?: quality
+        val result = standardQualities.minByOrNull { abs(it - intQuality) } ?: quality
         return "${result}p"
     }
 
-    private fun String.proper(): String {
-        return this.replaceFirstChar { if (it.isLowerCase()) it.titlecase(
-            Locale.getDefault()) else it.toString() }
+    private fun String.proper(): String = this.replaceFirstChar {
+        if (it.isLowerCase()) {
+            it.titlecase(Locale.getDefault())
+        } else {
+            it.toString()
+        }
     }
 
     companion object {

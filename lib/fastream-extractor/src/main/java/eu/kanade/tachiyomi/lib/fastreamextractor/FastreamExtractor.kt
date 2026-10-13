@@ -9,11 +9,14 @@ import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.OkHttpClient
-import okhttp3.internal.commonEmptyHeaders
 
-class FastreamExtractor(private val client: OkHttpClient, private val headers: Headers = commonEmptyHeaders) {
+class FastreamExtractor(
+    private val client: OkHttpClient,
+    private val headers: Headers = Headers.Builder().build(),
+) {
     private val videoHeaders by lazy {
-        headers.newBuilder()
+        headers
+            .newBuilder()
             .set("Referer", "$FASTREAM_URL/")
             .set("Origin", FASTREAM_URL)
             .build()
@@ -21,30 +24,39 @@ class FastreamExtractor(private val client: OkHttpClient, private val headers: H
 
     private val playlistUtils by lazy { PlaylistUtils(client, videoHeaders) }
 
-    fun videosFromUrl(url: String, prefix: String = "Fastream:", needsSleep: Boolean = true): List<Video> {
+    fun videosFromUrl(
+        url: String,
+        prefix: String = "Fastream:",
+        needsSleep: Boolean = true,
+    ): List<Video> {
         return runCatching {
             val firstDoc = client.newCall(GET(url, videoHeaders)).execute().asJsoup()
 
             if (needsSleep) Thread.sleep(5100L) // 5s is the minimum
 
-            val scriptElement = if (firstDoc.select("input[name]").any()) {
-                val form = FormBody.Builder().apply {
-                    firstDoc.select("input[name]").forEach {
-                        add(it.attr("name"), it.attr("value"))
-                    }
-                }.build()
-                val doc = client.newCall(POST(url, videoHeaders, body = form)).execute().asJsoup()
-                doc.selectFirst("script:containsData(jwplayer):containsData(vplayer)") ?: return emptyList()
-            } else {
-                firstDoc.selectFirst("script:containsData(jwplayer):containsData(vplayer)") ?: return emptyList()
-            }
-
-            val scriptData = scriptElement.data().let {
-                when {
-                    it.contains("eval(function(") -> JsUnpacker.unpackAndCombine(it)
-                    else -> it
+            val scriptElement =
+                if (firstDoc.select("input[name]").any()) {
+                    val form =
+                        FormBody
+                            .Builder()
+                            .apply {
+                                firstDoc.select("input[name]").forEach {
+                                    add(it.attr("name"), it.attr("value"))
+                                }
+                            }.build()
+                    val doc = client.newCall(POST(url, videoHeaders, body = form)).execute().asJsoup()
+                    doc.selectFirst("script:containsData(jwplayer):containsData(vplayer)") ?: return emptyList()
+                } else {
+                    firstDoc.selectFirst("script:containsData(jwplayer):containsData(vplayer)") ?: return emptyList()
                 }
-            } ?: return emptyList()
+
+            val scriptData =
+                scriptElement.data().let {
+                    when {
+                        it.contains("eval(function(") -> JsUnpacker.unpackAndCombine(it)
+                        else -> it
+                    }
+                } ?: return emptyList()
 
             val videoUrl = scriptData.substringAfter("file:\"").substringBefore("\"").trim()
 
@@ -52,7 +64,10 @@ class FastreamExtractor(private val client: OkHttpClient, private val headers: H
                 videoUrl.contains(".m3u8") -> {
                     playlistUtils.extractFromHls(videoUrl, videoNameGen = { "$prefix$it" })
                 }
-                else -> listOf(Video(videoUrl, prefix, videoUrl, videoHeaders))
+
+                else -> {
+                    listOf(Video(videoUrl = videoUrl, videoTitle = prefix, headers = videoHeaders, initialized = true))
+                }
             }
         }.getOrElse { emptyList() }
     }

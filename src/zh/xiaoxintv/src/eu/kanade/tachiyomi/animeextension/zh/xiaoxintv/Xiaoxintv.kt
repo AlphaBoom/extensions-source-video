@@ -5,6 +5,8 @@ import android.content.SharedPreferences
 import eu.kanade.tachiyomi.animesource.model.AnimeFilter
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
+import eu.kanade.tachiyomi.animesource.model.Hoster
+import eu.kanade.tachiyomi.animesource.model.Hoster.Companion.toHosterList
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
@@ -35,14 +37,17 @@ class Xiaoxintv : AnimeHttpSource() {
     override val supportsLatest: Boolean
         get() = true
 
+    override val supportsRelatedAnime = false
+
     private val majorSearchTypeSet: Array<SearchType>
         get() = defaultMajorSearchTypeSet
     private val searchSortTypeSet: Array<SearchSort>
         get() = defaultSortTypeSet
     private val filterUpdateRecord by lazy {
-        majorSearchTypeSet.associateWith {
-            false
-        }.toMutableMap()
+        majorSearchTypeSet
+            .associateWith {
+                false
+            }.toMutableMap()
     }
     private val json by injectLazy<Json>()
     private val preferences: SharedPreferences by lazy {
@@ -64,13 +69,15 @@ class Xiaoxintv : AnimeHttpSource() {
 
     override fun episodeListParse(response: Response): List<SEpisode> {
         val document = response.asJsoup()
-        return document.select("#playlist1 ul li").mapIndexed { index, element ->
-            SEpisode.create().apply {
-                url = element.select("a").attr("href")
-                name = element.attr("title")
-                episode_number = index.toFloat()
-            }
-        }.reversed()
+        return document
+            .select("#playlist1 ul li")
+            .mapIndexed { index, element ->
+                SEpisode.create().apply {
+                    url = element.select("a").attr("href")
+                    name = element.attr("title")
+                    episode_number = index.toFloat()
+                }
+            }.reversed()
     }
 
     private fun findVideoUrl(document: Document): String {
@@ -79,15 +86,15 @@ class Xiaoxintv : AnimeHttpSource() {
         return info.jsonObject["url"]!!.jsonPrimitive.content
     }
 
-    override fun videoListParse(response: Response): List<Video> {
+    override fun hosterListParse(response: Response): List<Hoster> = parseVideos(response).toHosterList()
+
+    protected open fun parseVideos(response: Response): List<Video> {
         val document = response.asJsoup()
         val videoUrl = findVideoUrl(document)
-        return listOf(Video(videoUrl, "小宝影院", videoUrl))
+        return listOf(Video(videoUrl = videoUrl, videoTitle = "小宝影院", initialized = true))
     }
 
-    override fun latestUpdatesParse(response: Response): AnimesPage {
-        return searchFilterParse(response)
-    }
+    override fun latestUpdatesParse(response: Response): AnimesPage = searchFilterParse(response)
 
     override fun latestUpdatesRequest(page: Int) = searchAnimeRequest(
         page,
@@ -97,9 +104,7 @@ class Xiaoxintv : AnimeHttpSource() {
         ),
     )
 
-    override fun popularAnimeParse(response: Response): AnimesPage {
-        return searchFilterParse(response)
-    }
+    override fun popularAnimeParse(response: Response): AnimesPage = searchFilterParse(response)
 
     override fun popularAnimeRequest(page: Int) = searchAnimeRequest(
         page,
@@ -121,27 +126,37 @@ class Xiaoxintv : AnimeHttpSource() {
     private fun searchFilterParse(response: Response): AnimesPage {
         val document = response.asJsoup()
         tryUpdateFilters(response.request, document)
-        val items = document.select(".myui-vodlist__box").map {
-            SAnime.create().apply {
-                val thumbNode = it.select(".myui-vodlist__thumb")
-                url = thumbNode.attr("href")
-                thumbnail_url = thumbNode.attr("abs:data-original")
-                title = thumbNode.attr("title")
+        val items =
+            document.select(".myui-vodlist__box").map {
+                SAnime.create().apply {
+                    val thumbNode = it.select(".myui-vodlist__thumb")
+                    url = thumbNode.attr("href")
+                    thumbnail_url = thumbNode.attr("abs:data-original")
+                    title = thumbNode.attr("title")
+                }
             }
-        }
         val nextPageUrl = document.select(".myui-page a:contains(下一页)").attr("href")
-        return AnimesPage(items, !response.request.url.toString().endsWith(nextPageUrl))
+        return AnimesPage(
+            items,
+            !response.request.url
+                .toString()
+                .endsWith(nextPageUrl),
+        )
     }
 
-    private fun tryUpdateFilters(request: Request, document: Document) {
+    private fun tryUpdateFilters(
+        request: Request,
+        document: Document,
+    ) {
         val requestUrl = request.url.toString()
-        val match = filterUpdateRecord.firstNotNullOfOrNull {
-            if (requestUrl.endsWith(it.key.toPath())) {
-                it.key
-            } else {
-                null
+        val match =
+            filterUpdateRecord.firstNotNullOfOrNull {
+                if (requestUrl.endsWith(it.key.toPath())) {
+                    it.key
+                } else {
+                    null
+                }
             }
-        }
         if (match == null || filterUpdateRecord[match] == true) {
             return
         }
@@ -157,38 +172,46 @@ class Xiaoxintv : AnimeHttpSource() {
             val options = li.drop(1)
             when (key) {
                 FilterType.TYPE.title -> {
-                    typeList = options.mapIndexed { index, element ->
-                        SearchType(
-                            element.text(),
-                            element.attr("href").substringAfter("id/")
-                                .substringBefore("/").removeSuffix(".html"),
-                            ignore = index == 0,
-                        )
-                    }
+                    typeList =
+                        options.mapIndexed { index, element ->
+                            SearchType(
+                                element.text(),
+                                element
+                                    .attr("href")
+                                    .substringAfter("id/")
+                                    .substringBefore("/")
+                                    .removeSuffix(".html"),
+                                ignore = index == 0,
+                            )
+                        }
                 }
 
                 FilterType.LANG.title -> {
-                    langList = options.mapIndexed { index, element ->
-                        SearchLang(element.text(), ignore = index == 0)
-                    }
+                    langList =
+                        options.mapIndexed { index, element ->
+                            SearchLang(element.text(), ignore = index == 0)
+                        }
                 }
 
                 FilterType.YEAR.title -> {
-                    yearList = options.mapIndexed { index, element ->
-                        SearchYear(element.text(), ignore = index == 0)
-                    }
+                    yearList =
+                        options.mapIndexed { index, element ->
+                            SearchYear(element.text(), ignore = index == 0)
+                        }
                 }
 
                 FilterType.REGION.title -> {
-                    regionList = options.mapIndexed { index, element ->
-                        SearchRegion(element.text(), ignore = index == 0)
-                    }
+                    regionList =
+                        options.mapIndexed { index, element ->
+                            SearchRegion(element.text(), ignore = index == 0)
+                        }
                 }
 
                 FilterType.CLASS.title -> {
-                    classList = options.mapIndexed { index, element ->
-                        SearchClass(element.text(), ignore = index == 0)
-                    }
+                    classList =
+                        options.mapIndexed { index, element ->
+                            SearchClass(element.text(), ignore = index == 0)
+                        }
                 }
 
                 else -> {}
@@ -203,21 +226,33 @@ class Xiaoxintv : AnimeHttpSource() {
 
     private fun searchKeywordParse(response: Response): AnimesPage {
         val document = response.asJsoup()
-        val items = document.select("#searchList li").map {
-            SAnime.create().apply {
-                val thumbNode = it.select("a.myui-vodlist__thumb")
-                url = thumbNode.attr("href")
-                thumbnail_url = thumbNode.attr("abs:data-original")
-                title = thumbNode.attr("title")
+        val items =
+            document.select("#searchList li").map {
+                SAnime.create().apply {
+                    val thumbNode = it.select("a.myui-vodlist__thumb")
+                    url = thumbNode.attr("href")
+                    thumbnail_url = thumbNode.attr("abs:data-original")
+                    title = thumbNode.attr("title")
+                }
             }
-        }
         val nextPageUrl = document.select(".myui-page a:contains(下一页)").attr("href")
-        return AnimesPage(items, !response.request.url.toString().endsWith(nextPageUrl))
+        return AnimesPage(
+            items,
+            !response.request.url
+                .toString()
+                .endsWith(nextPageUrl),
+        )
     }
 
-    private fun keywordQuery(page: Int, query: String): Request {
-        val searchUrl = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegments("index.php/vod/search")
+    private fun keywordQuery(
+        page: Int,
+        query: String,
+    ): Request {
+        val searchUrl =
+            baseUrl
+                .toHttpUrl()
+                .newBuilder()
+                .addPathSegments("index.php/vod/search")
         if (page > 1) {
             searchUrl.addPathSegments("page/$page/wd/$query")
         } else {
@@ -226,18 +261,26 @@ class Xiaoxintv : AnimeHttpSource() {
         return GET(searchUrl.build())
     }
 
-    override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request {
+    override fun searchAnimeRequest(
+        page: Int,
+        query: String,
+        filters: AnimeFilterList,
+    ): Request {
         if (query.isNotBlank()) {
             return keywordQuery(page, query)
         }
         val searchUrl = baseUrl.toHttpUrl().newBuilder().addPathSegments("index.php/vod/show")
-        val filterPath = filters.flatMap {
-            if (it is GroupFilter) {
-                it.state
-            } else {
-                listOf(it)
-            }
-        }.filterIsInstance<PathFilter>().map { it.selected }.toPath()
+        val filterPath =
+            filters
+                .flatMap {
+                    if (it is GroupFilter) {
+                        it.state
+                    } else {
+                        listOf(it)
+                    }
+                }.filterIsInstance<PathFilter>()
+                .map { it.selected }
+                .toPath()
         if (filterPath.isEmpty()) {
             searchUrl.addPathSegments(majorSearchTypeSet[0].toPath().removePrefix("/"))
         } else {
@@ -257,17 +300,20 @@ class Xiaoxintv : AnimeHttpSource() {
     }
 
     override fun getFilterList(): AnimeFilterList {
-        val groupFilters = majorSearchTypeSet.map { majorType ->
-            val config = preferences.findSearchFilterConfig(majorType.id, json)
-            val filters = listOfNotNull(
-                config.type.toFilter(FilterType.TYPE.title),
-                config.region.toFilter(FilterType.REGION.title),
-                config.category.toFilter(FilterType.CLASS.title),
-                config.year.toFilter(FilterType.YEAR.title),
-                config.lang.toFilter(FilterType.LANG.title),
-            )
-            GroupFilter(majorType.name, filters)
-        }.toTypedArray()
+        val groupFilters =
+            majorSearchTypeSet
+                .map { majorType ->
+                    val config = preferences.findSearchFilterConfig(majorType.id, json)
+                    val filters =
+                        listOfNotNull(
+                            config.type.toFilter(FilterType.TYPE.title),
+                            config.region.toFilter(FilterType.REGION.title),
+                            config.category.toFilter(FilterType.CLASS.title),
+                            config.year.toFilter(FilterType.YEAR.title),
+                            config.lang.toFilter(FilterType.LANG.title),
+                        )
+                    GroupFilter(majorType.name, filters)
+                }.toTypedArray()
         return AnimeFilterList(
             PathFilter("主分类", majorSearchTypeSet),
             PathFilter(FilterType.SORT.title, searchSortTypeSet),

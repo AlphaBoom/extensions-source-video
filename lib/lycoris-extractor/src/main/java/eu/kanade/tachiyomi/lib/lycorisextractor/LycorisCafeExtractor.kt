@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.lib.lycorisextractor
 
+import android.util.Base64
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
-import android.util.Base64
 import eu.kanade.tachiyomi.util.asJsoup
 import eu.kanade.tachiyomi.util.parseAs
 import kotlinx.serialization.Serializable
@@ -12,33 +12,42 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import java.nio.charset.Charset
 
-class LycorisCafeExtractor(private val client: OkHttpClient) {
-
+class LycorisCafeExtractor(
+    private val client: OkHttpClient,
+) {
     private val GETSECONDARYURL = "https://www.lycoris.cafe/api/watch/getSecondaryLink"
 
     private val GETLNKURL = "https://www.lycoris.cafe/api/watch/getLink"
 
     private val wordsRegex by lazy {
         Regex(
-        """\\U([0-9a-fA-F]{8})|""" +     // \UXXXXXXXX
-            """\\u([0-9a-fA-F]{4})|""" +     // \uXXXX
-            """\\x([0-9a-fA-F]{2})|""" +     // \xHH
-            """\\([0-7]{1,3})|""" +          // \OOO (octal)
-            """\\([btnfr"'$\\])"""         // \n, \t, itd.
+            """\\U([0-9a-fA-F]{8})|""" + // \UXXXXXXXX
+                """\\u([0-9a-fA-F]{4})|""" + // \uXXXX
+                """\\x([0-9a-fA-F]{2})|""" + // \xHH
+                """\\([0-7]{1,3})|""" + // \OOO (octal)
+                """\\([btnfr"'$\\])""", // \n, \t, itd.
         )
     }
 
     // Credit: https://github.com/skoruppa/docchi-stremio-addon/blob/main/app/players/lycoris.py
-    fun getVideosFromUrl(url: String, headers: Headers, prefix: String): List<Video> {
-
+    fun getVideosFromUrl(
+        url: String,
+        headers: Headers,
+        prefix: String,
+    ): List<Video> {
         val videos = mutableListOf<Video>()
-        val embedHeaders = headers.newBuilder()
-            .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36")
-            .build()
+        val embedHeaders =
+            headers
+                .newBuilder()
+                .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36")
+                .build()
 
-        val document = client.newCall(
-            GET(url, headers = embedHeaders),
-        ).execute().asJsoup()
+        val document =
+            client
+                .newCall(
+                    GET(url, headers = embedHeaders),
+                ).execute()
+                .asJsoup()
 
         val script = document.selectFirst("script[type='application/json']")?.data() ?: return emptyList()
 
@@ -46,53 +55,56 @@ class LycorisCafeExtractor(private val client: OkHttpClient) {
 
         val data = scriptData.body.parseAs<ScriptEpisode>()
 
-        val linkList = data.episodeInfo.id?.let {
-            fetchAndDecodeVideo(client, data.episodeInfo.id.toString(), isSecondary = false)
-        }
+        val linkList =
+            data.episodeInfo.id?.let {
+                fetchAndDecodeVideo(client, data.episodeInfo.id.toString(), isSecondary = false)
+            }
 
-        val fhdLink = data.episodeInfo.FHD?.let {
-            fetchAndDecodeVideo(client, data.episodeInfo.FHD, isSecondary = true)
-        }
-        val sdLink = data.episodeInfo.SD?.let {
-            fetchAndDecodeVideo(client, data.episodeInfo.SD, isSecondary = true)
-        }
-        val hdLink = data.episodeInfo.HD?.let {
-            fetchAndDecodeVideo(client, data.episodeInfo.HD, isSecondary = true)
-        }
+        val fhdLink =
+            data.episodeInfo.FHD?.let {
+                fetchAndDecodeVideo(client, data.episodeInfo.FHD, isSecondary = true)
+            }
+        val sdLink =
+            data.episodeInfo.SD?.let {
+                fetchAndDecodeVideo(client, data.episodeInfo.SD, isSecondary = true)
+            }
+        val hdLink =
+            data.episodeInfo.HD?.let {
+                fetchAndDecodeVideo(client, data.episodeInfo.HD, isSecondary = true)
+            }
 
         if (linkList.isNullOrBlank() || linkList == "{}") {
             if (!fhdLink.isNullOrBlank()) {
-                videos.add(Video(fhdLink, "${prefix}lycoris.cafe - 1080p", fhdLink))
+                videos.add(Video(videoUrl = fhdLink, videoTitle = "${prefix}lycoris.cafe - 1080p", initialized = true))
             }
             if (!hdLink.isNullOrBlank()) {
-                videos.add(Video(hdLink, "${prefix}lycoris.cafe - 720p", hdLink))
+                videos.add(Video(videoUrl = hdLink, videoTitle = "${prefix}lycoris.cafe - 720p", initialized = true))
             }
             if (!sdLink.isNullOrBlank()) {
-                videos.add(Video(sdLink, "${prefix}lycoris.cafe - 480p", sdLink))
+                videos.add(Video(videoUrl = sdLink, videoTitle = "${prefix}lycoris.cafe - 480p", initialized = true))
             }
         } else {
             val videoLinks = linkList.parseAs<VideoLinksApi>()
 
             videoLinks.FHD?.takeIf { checkLinks(client, it) }?.let {
-                videos.add(Video(it, "${prefix}lycoris.cafe - 1080p", it))
+                videos.add(Video(videoUrl = it, videoTitle = "${prefix}lycoris.cafe - 1080p", initialized = true))
             } ?: fhdLink?.takeIf { checkLinks(client, it) }?.let {
-                videos.add(Video(it, "${prefix}lycoris.cafe - 1080p", it))
+                videos.add(Video(videoUrl = it, videoTitle = "${prefix}lycoris.cafe - 1080p", initialized = true))
             }
 
             videoLinks.HD?.takeIf { checkLinks(client, it) }?.let {
-                videos.add(Video(it, "${prefix}lycoris.cafe - 720p", it))
+                videos.add(Video(videoUrl = it, videoTitle = "${prefix}lycoris.cafe - 720p", initialized = true))
             } ?: hdLink?.takeIf { checkLinks(client, it) }?.let {
-                videos.add(Video(it, "${prefix}lycoris.cafe - 720p", it))
+                videos.add(Video(videoUrl = it, videoTitle = "${prefix}lycoris.cafe - 720p", initialized = true))
             }
 
             videoLinks.SD?.takeIf { checkLinks(client, it) }?.let {
-                videos.add(Video(it, "${prefix}lycoris.cafe - 480p", it))
+                videos.add(Video(videoUrl = it, videoTitle = "${prefix}lycoris.cafe - 480p", initialized = true))
             } ?: sdLink?.takeIf { checkLinks(client, it) }?.let {
-                videos.add(Video(it, "${prefix}lycoris.cafe - 480p", it))
+                videos.add(Video(videoUrl = it, videoTitle = "${prefix}lycoris.cafe - 480p", initialized = true))
             }
         }
         return videos
-
     }
 
     private fun decodeVideoLinks(encodedUrl: String): String? {
@@ -106,10 +118,11 @@ class LycorisCafeExtractor(private val client: OkHttpClient) {
 
         val encodedUrlWithoutSignature = encodedUrl.dropLast(2)
 
-        val decoded = encodedUrlWithoutSignature
-            .reversed()
-            .map { (it.code - 7).toChar() }
-            .joinToString("")
+        val decoded =
+            encodedUrlWithoutSignature
+                .reversed()
+                .map { (it.code - 7).toChar() }
+                .joinToString("")
 
         return try {
             val base64Decoded = Base64.decode(decoded, Base64.DEFAULT)
@@ -119,7 +132,11 @@ class LycorisCafeExtractor(private val client: OkHttpClient) {
         }
     }
 
-    private fun fetchAndDecodeVideo(client: OkHttpClient, episodeId: String, isSecondary: Boolean = false): String? {
+    private fun fetchAndDecodeVideo(
+        client: OkHttpClient,
+        episodeId: String,
+        isSecondary: Boolean = false,
+    ): String? {
         val url: HttpUrl
 
         if (isSecondary) {
@@ -127,15 +144,22 @@ class LycorisCafeExtractor(private val client: OkHttpClient) {
             val unicodeEscape = decodePythonEscape(convertedText)
             val finalText = unicodeEscape.toByteArray(Charsets.ISO_8859_1).toString(Charsets.UTF_8)
 
-            url = GETLNKURL.toHttpUrl().newBuilder()
-                .addQueryParameter("link", finalText)
-                .build()
+            url =
+                GETLNKURL
+                    .toHttpUrl()
+                    .newBuilder()
+                    .addQueryParameter("link", finalText)
+                    .build()
         } else {
-            url = GETSECONDARYURL.toHttpUrl().newBuilder()
-                .addQueryParameter("id", episodeId)
-                .build()
+            url =
+                GETSECONDARYURL
+                    .toHttpUrl()
+                    .newBuilder()
+                    .addQueryParameter("id", episodeId)
+                    .build()
         }
-        client.newCall(GET(url))
+        client
+            .newCall(GET(url))
             .execute()
             .use { response ->
                 val data = response.body.string()
@@ -143,14 +167,18 @@ class LycorisCafeExtractor(private val client: OkHttpClient) {
             }
     }
 
-    private fun checkLinks(client: OkHttpClient, link: String): Boolean {
+    private fun checkLinks(
+        client: OkHttpClient,
+        link: String,
+    ): Boolean {
         if (!link.contains("https://")) return false
 
         client.newCall(GET(link)).execute().use { response ->
             return response.code.toString() == "200"
         }
     }
-    //thx deepseek
+
+    // thx deepseek
     private fun decodePythonEscape(text: String): String {
         // 1. Obsługa kontynuacji linii (backslash + newline)
         val withoutLineContinuation = text.replace("\\\n", "")
@@ -178,6 +206,7 @@ class LycorisCafeExtractor(private val client: OkHttpClient) {
     }
 
     private fun handleUnicode4(hex: String) = hex.toInt(16).toChar().toString()
+
     private fun handleHex(hex: String) = hex.toInt(16).toChar().toString()
 
     private fun handleOctal(octal: String): String {
@@ -200,12 +229,12 @@ class LycorisCafeExtractor(private val client: OkHttpClient) {
 
     @Serializable
     data class ScriptBody(
-        val body: String
+        val body: String,
     )
 
     @Serializable
     data class ScriptEpisode(
-        val episodeInfo: EpisodeInfo
+        val episodeInfo: EpisodeInfo,
     )
 
     @Serializable
@@ -222,12 +251,6 @@ class LycorisCafeExtractor(private val client: OkHttpClient) {
         val SD: String? = null,
         val FHD: String? = null,
         val Source: String? = null,
-        val SourceMKV: String? = null
+        val SourceMKV: String? = null,
     )
-
 }
-
-
-
-
-

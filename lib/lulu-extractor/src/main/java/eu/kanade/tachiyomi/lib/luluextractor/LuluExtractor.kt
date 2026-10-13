@@ -7,15 +7,22 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import java.util.regex.Pattern
 
-class LuluExtractor(private val client: OkHttpClient, headers: Headers) {
+class LuluExtractor(
+    private val client: OkHttpClient,
+    headers: Headers,
+) {
+    private val headers =
+        headers
+            .newBuilder()
+            .add("Referer", "https://luluvdo.com/")
+            .add("Origin", "https://luluvdo.com")
+            .build()
 
-    private val headers = headers.newBuilder()
-        .add("Referer", "https://luluvdo.com/")
-        .add("Origin", "https://luluvdo.com")
-        .build()
-
-    //Credit: https://github.com/skoruppa/docchi-stremio-addon/blob/main/app/players/lulustream.py
-    fun videosFromUrl(url: String, prefix: String): List<Video> {
+    // Credit: https://github.com/skoruppa/docchi-stremio-addon/blob/main/app/players/lulustream.py
+    fun videosFromUrl(
+        url: String,
+        prefix: String,
+    ): List<Video> {
         val videos = mutableListOf<Video>()
 
         try {
@@ -24,7 +31,7 @@ class LuluExtractor(private val client: OkHttpClient, headers: Headers) {
             val fixedUrl = fixM3u8Link(m3u8Url)
             val quality = getResolution(fixedUrl)
 
-            videos.add(Video(fixedUrl, "${prefix}Lulu - $quality", fixedUrl, headers))
+            videos.add(Video(videoUrl = fixedUrl, videoTitle = "${prefix}Lulu - $quality", headers = headers, initialized = true))
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -36,13 +43,16 @@ class LuluExtractor(private val client: OkHttpClient, headers: Headers) {
         return when {
             html.contains("eval(function(p,a,c,k,e") -> {
                 val unpacked = JavaScriptUnpacker.unpack(html) ?: return null
-                Pattern.compile("sources:\\[\\{file:\"([^\"]+)\"")
+                Pattern
+                    .compile("sources:\\[\\{file:\"([^\"]+)\"")
                     .matcher(unpacked)
                     .takeIf { it.find() }
                     ?.group(1)
             }
+
             else -> {
-                Pattern.compile("sources: \\[\\{file:\"(https?://[^\"]+)\"")
+                Pattern
+                    .compile("sources: \\[\\{file:\"(https?://[^\"]+)\"")
                     .matcher(html)
                     .takeIf { it.find() }
                     ?.group(1)
@@ -52,14 +62,15 @@ class LuluExtractor(private val client: OkHttpClient, headers: Headers) {
 
     private fun fixM3u8Link(link: String): String {
         val paramOrder = listOf("t", "s", "e", "f")
-        val params = Pattern.compile("[?&]([^=]*)=([^&]*)").matcher(link).let { matcher ->
-            generateSequence { if (matcher.find()) matcher.group(1) to matcher.group(2) else null }.toList()
-        }
+        val params =
+            Pattern.compile("[?&]([^=]*)=([^&]*)").matcher(link).let { matcher ->
+                generateSequence { if (matcher.find()) matcher.group(1) to matcher.group(2) else null }.toList()
+            }
 
         val paramDict = mutableMapOf<String, String>()
         val extraParams = mutableMapOf<String, String>()
 
-        params.forEachIndexed { index, (key , value) ->
+        params.forEachIndexed { index, (key, value) ->
             if (key.isNullOrEmpty()) {
                 if (index < paramOrder.size) {
                     if (value != null) {
@@ -89,28 +100,33 @@ class LuluExtractor(private val client: OkHttpClient, headers: Headers) {
         return fixedLink.build().toString()
     }
 
-    private fun getResolution(m3u8Url: String): String {
-        return try {
-            val content = client.newCall(GET(m3u8Url, headers)).execute()
+    private fun getResolution(m3u8Url: String): String = try {
+        val content =
+            client
+                .newCall(GET(m3u8Url, headers))
+                .execute()
                 .use { it.body.string() }
 
-            Pattern.compile("RESOLUTION=\\d+x(\\d+)")
-                .matcher(content)
-                .takeIf { it.find() }
-                ?.group(1)
-                ?.let { "${it}p" }
-                ?: "Unknown"
-        } catch (e: Exception) {
-            "Unknown"
-        }
+        Pattern
+            .compile("RESOLUTION=\\d+x(\\d+)")
+            .matcher(content)
+            .takeIf { it.find() }
+            ?.group(1)
+            ?.let { "${it}p" }
+            ?: "Unknown"
+    } catch (e: Exception) {
+        "Unknown"
     }
 }
 
 object JavaScriptUnpacker {
     private val UNPACK_REGEX by lazy {
-        Regex("""\}\('(.*)', *(\d+), *(\d+), *'(.*?)'\.split\('\|'\)""",
-            RegexOption.DOT_MATCHES_ALL)
+        Regex(
+            """\}\('(.*)', *(\d+), *(\d+), *'(.*?)'\.split\('\|'\)""",
+            RegexOption.DOT_MATCHES_ALL,
+        )
     }
+
     fun unpack(encodedJs: String): String? {
         val match = UNPACK_REGEX.find(encodedJs) ?: return null
         val (payload, radixStr, countStr, symtabStr) = match.destructured
@@ -121,17 +137,23 @@ object JavaScriptUnpacker {
 
         if (symtab.size != count) throw IllegalArgumentException("Invalid symtab size")
 
-        val baseDict = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-            .take(radix)
-            .withIndex()
-            .associate { it.value to it.index }
+        val baseDict =
+            "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                .take(radix)
+                .withIndex()
+                .associate { it.value to it.index }
 
-        return Regex("""\b\w+\b""").replace(payload) { mr ->
-            symtab.getOrNull(unbase(mr.value, radix, baseDict)) ?: mr.value
-        }.replace("\\", "")
-
+        return Regex("""\b\w+\b""")
+            .replace(payload) { mr ->
+                symtab.getOrNull(unbase(mr.value, radix, baseDict)) ?: mr.value
+            }.replace("\\", "")
     }
-    private fun unbase(value: String, radix: Int, dict: Map<Char, Int>): Int {
+
+    private fun unbase(
+        value: String,
+        radix: Int,
+        dict: Map<Char, Int>,
+    ): Int {
         var result = 0
         var multiplier = 1
 

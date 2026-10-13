@@ -14,7 +14,9 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 
-enum class BangumiSubjectType(val value: Int) {
+enum class BangumiSubjectType(
+    val value: Int,
+) {
     BOOK(1),
     ANIME(2),
     MUSIC(3),
@@ -54,22 +56,28 @@ object BangumiScraper {
         subjectType: BangumiSubjectType = BangumiSubjectType.ANIME,
         requestProducer: (url: HttpUrl) -> Request = { url -> GET(url) },
     ): SAnime {
-        val httpUrl = SEARCH_URL.toHttpUrl().newBuilder()
-            .addPathSegment(keyword)
-            .addQueryParameter(
-                "responseGroup",
-                if (fetchType == BangumiFetchType.ALL) {
-                    "small"
-                } else {
-                    "medium"
-                },
-            )
-            .addQueryParameter("type", "${subjectType.value}")
-            .addQueryParameter("start", "0")
-            .addQueryParameter("max_results", "1")
-            .build()
-        val searchResponse = client.newCall(requestProducer(httpUrl)).awaitSuccess()
-            .checkErrorMessage().parseAs<SearchResponse>()
+        val httpUrl =
+            SEARCH_URL
+                .toHttpUrl()
+                .newBuilder()
+                .addPathSegment(keyword)
+                .addQueryParameter(
+                    "responseGroup",
+                    if (fetchType == BangumiFetchType.ALL) {
+                        "small"
+                    } else {
+                        "medium"
+                    },
+                ).addQueryParameter("type", "${subjectType.value}")
+                .addQueryParameter("start", "0")
+                .addQueryParameter("max_results", "1")
+                .build()
+        val searchResponse =
+            client
+                .newCall(requestProducer(httpUrl))
+                .awaitSuccess()
+                .checkErrorMessage()
+                .parseAs<SearchResponse>()
         return if (searchResponse.list.isEmpty()) {
             SAnime.create()
         } else {
@@ -90,17 +98,27 @@ object BangumiScraper {
         id: String,
         requestProducer: (url: HttpUrl) -> Request,
     ): SAnime {
-        val httpUrl = SUBJECTS_URL.toHttpUrl().newBuilder().addPathSegment(id).build()
-        val subject = client.newCall(requestProducer(httpUrl)).awaitSuccess()
-            .checkErrorMessage().parseAs<Subject>()
+        val httpUrl =
+            SUBJECTS_URL
+                .toHttpUrl()
+                .newBuilder()
+                .addPathSegment(id)
+                .build()
+        val subject =
+            client
+                .newCall(requestProducer(httpUrl))
+                .awaitSuccess()
+                .checkErrorMessage()
+                .parseAs<Subject>()
         return SAnime.create().apply {
             thumbnail_url = subject.images.large
             description = subject.summary
-            genre = buildList {
-                addAll(subject.metaTags)
-                subject.findInfo("动画制作")?.let { add(it) }
-                subject.findInfo("放送开始")?.let { add(it) }
-            }.joinToString()
+            genre =
+                buildList {
+                    addAll(subject.metaTags)
+                    subject.findInfo("动画制作")?.let { add(it) }
+                    subject.findInfo("放送开始")?.let { add(it) }
+                }.joinToString()
             author = subject.findAuthor()
             artist = subject.findArtist()
             if (subject.findInfo("播放结束") != null) {
@@ -114,13 +132,14 @@ object BangumiScraper {
     private fun Response.checkErrorMessage(): String {
         val responseStr = body.string()
         val errorMessage =
-            responseStr.parseAs<JsonElement>().jsonObject["error"]?.jsonPrimitive?.contentOrNull
+            responseStr
+                .parseAs<JsonElement>()
+                .jsonObject["error"]
+                ?.jsonPrimitive
+                ?.contentOrNull
         if (errorMessage != null) {
             throw BangumiScraperException(errorMessage)
         }
         return responseStr
     }
 }
-
-
-
