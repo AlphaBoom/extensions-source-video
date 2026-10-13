@@ -25,7 +25,6 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import java.net.URLEncoder
 
 class Rule34Video :
     ParsedAnimeHttpSource(),
@@ -125,24 +124,30 @@ class Rule34Video :
 
         val tagFilter = (filters.find { it is TagFilter } as? TagFilter)?.state ?: ""
 
-        val url = "$baseUrl/search_ajax.php?tag=${tagFilter.ifBlank { "." }}"
-        val response = client.newCall(GET(url, headers)).execute()
+        val tagUrl = "$baseUrl/search_ajax.php?tag=${tagFilter.ifBlank { "." }}"
+        val response = client.newCall(GET(tagUrl, headers)).execute()
         tagDocument = response.asJsoup()
 
         val tagSearch = filters.getUriPart<TagSearch>()
 
-        return if (query.isNotEmpty()) {
-            if (query.startsWith(PREFIX_SEARCH)) {
-                val newQuery = query.removePrefix(PREFIX_SEARCH).dropLastWhile { it.isDigit() }
-                GET("$baseUrl/search/$newQuery")
-            } else {
-                // Same path the site's search form builds: words joined by "-", relevance-sorted by default.
-                val slug = query.trim().split(Regex("\\s+")).joinToString("-") { it.urlEncoded() }
-                GET("$baseUrl/search/$slug/?flag1=$categoryFilter&sort_by=$sortType&from_videos=$page&tag_ids=all%2C$tagSearch")
-            }
-        } else {
-            GET("$baseUrl/search/?flag1=$categoryFilter&sort_by=$sortType&from_videos=$page&tag_ids=all%2C$tagSearch")
+        if (query.startsWith(PREFIX_SEARCH)) {
+            val newQuery = query.removePrefix(PREFIX_SEARCH).dropLastWhile { it.isDigit() }
+            return GET("$baseUrl/search/$newQuery")
         }
+
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegment("search")
+            // Same path the site's search form builds: words joined by "-", relevance-sorted by default.
+            if (query.isNotBlank()) {
+                addPathSegment(query.trim().split(Regex("\\s+")).joinToString("-"))
+            }
+            addPathSegment("")
+            addQueryParameter("flag1", categoryFilter)
+            addQueryParameter("sort_by", sortType)
+            addQueryParameter("from_videos", page.toString())
+            addQueryParameter("tag_ids", "all,$tagSearch")
+        }.build()
+        return GET(url, headers)
     }
 
     override fun searchAnimeSelector() = popularAnimeSelector()
@@ -372,8 +377,6 @@ class Rule34Video :
     private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) : AnimeFilter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
-
-    private fun String.urlEncoded(): String = URLEncoder.encode(this, "UTF-8").replace("+", "%20")
 
     companion object {
         const val PREFIX_SEARCH = "slug:"
