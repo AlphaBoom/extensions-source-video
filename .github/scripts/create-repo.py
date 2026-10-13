@@ -3,6 +3,7 @@ import os
 import re
 import shutil
 import subprocess
+import tomllib
 from pathlib import Path
 from zipfile import ZipFile
 
@@ -16,7 +17,10 @@ APPLICATION_ICON_320_REGEX = re.compile(
 )
 LANGUAGE_REGEX = re.compile(r"aniyomi-([^\.]+)")
 
-ANDROID_BUILD_TOOLS = Path(os.environ["ANDROID_HOME"]) / "build-tools" / "37.0.0"
+# Same build tools version as the Gradle build and the workflows' setup-android step.
+with (Path(__file__).resolve().parents[2] / "gradle" / "kei.versions.toml").open("rb") as f:
+    BUILD_TOOLS_VERSION = tomllib.load(f)["versions"]["android-build-tools"]
+ANDROID_BUILD_TOOLS = Path(os.environ["ANDROID_HOME"]) / "build-tools" / BUILD_TOOLS_VERSION
 REPO_DIR = Path(os.getenv("REPO_DIR", "repo"))
 REPO_APK_DIR = REPO_DIR / "apk"
 REPO_ICON_DIR = REPO_DIR / "icon"

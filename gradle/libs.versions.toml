@@ -51,5 +51,6 @@ ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
 
 [bundles]
-# Provided by the Aniyomi host at runtime: always compileOnly.
-common = ["kotlin-stdlib", "coroutines-core", "coroutines-android", "injekt", "kotlin-protobuf", "kotlin-json", "kotlin-json-okio", "jsoup", "jspecify", "okhttp-core", "okhttp-brotli", "okhttp-zstd", "quickjs", "nanohttpd", "aniyomi-lib"]
+# Provided by the Aniyomi host at runtime: always compileOnly. NanoHTTPD is deliberately absent:
+# the host's copy is stripped by R8, so modules that need it bundle `libs.nanohttpd`.
+common = ["kotlin-stdlib", "coroutines-core", "coroutines-android", "injekt", "kotlin-protobuf", "kotlin-json", "kotlin-json-okio", "jsoup", "jspecify", "okhttp-core", "okhttp-brotli", "okhttp-zstd", "quickjs", "aniyomi-lib"]

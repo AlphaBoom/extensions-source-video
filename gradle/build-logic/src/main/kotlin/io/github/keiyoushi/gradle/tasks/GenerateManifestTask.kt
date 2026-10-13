@@ -58,8 +58,8 @@ abstract class GenerateManifestTask : DefaultTask() {
                 appendLine("                <category android:name=\"android.intent.category.BROWSABLE\" />")
                 appendLine("                <data android:scheme=\"https\" />")
                 appendLine("                <data android:scheme=\"http\" />")
-                f.hosts.forEach { appendLine("                <data android:host=\"$it\" />") }
-                f.pathPatterns.forEach { appendLine("                <data android:pathPattern=\"$it\" />") }
+                f.hosts.forEach { appendLine("                <data android:host=\"${it.escapeXml()}\" />") }
+                f.pathPatterns.forEach { appendLine("                <data android:pathPattern=\"${it.escapeXml()}\" />") }
                 append("            </intent-filter>")
             }
         }
@@ -105,4 +105,4 @@ abstract class GenerateManifestTask : DefaultTask() {
     }
 }
 
-private fun String.escapeXml() = replace("&", "&amp;").replace("<", "&lt;").replace("\"", "&quot;")
+private fun String.escapeXml() = replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&apos;")

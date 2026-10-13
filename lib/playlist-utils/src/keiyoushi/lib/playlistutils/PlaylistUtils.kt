@@ -165,7 +165,7 @@ class PlaylistUtils(
                 videoTitle = videoNameGen(resolution),
                 resolution = resolution.toIntOrNull(),
                 bitrate =
-                Regex("(?:^|[,:])BANDWIDTH=(\\d+)")
+                BANDWIDTH_REGEX
                     .find(it.substringBefore("\n"))
                     ?.groupValues
                     ?.get(1)
@@ -414,6 +414,8 @@ class PlaylistUtils(
     }
 
     companion object {
+        private val BANDWIDTH_REGEX = Regex("(?:^|[,:])BANDWIDTH=(\\d+)")
+
         private val FIX_SUBTITLE_REGEX = Regex("""${'$'}(\n{2,})(?!(?:\d+:)*\d+(?:\.\d+)?\s-+>\s(?:\d+:)*\d+(?:\.\d+)?)""", RegexOption.MULTILINE)
 
         private const val PLAYLIST_SEPARATOR = "#EXT-X-STREAM-INF:"

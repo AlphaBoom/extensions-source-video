@@ -45,7 +45,8 @@ import kotlin.time.Duration.Companion.days
  * Suspend-first base class for Aniyomi API 17 sources, ported from Keiyoushi's `KeiSource`.
  *
  * The filter cache uses `java.util.zip` instead of zstd-kmp: Aniyomi's minified release build
- * keeps OkHttp's public API but not `com.squareup.zstd`, so extensions must not call it directly.
+ * keeps the zstd decompression used by OkHttp's [Zstd] (so `Content-Encoding: zstd` responses
+ * still decode) but strips the rest of `com.squareup.zstd`, including the compression API.
  */
 abstract class KeiSource : AnimeHttpSource() {
 
