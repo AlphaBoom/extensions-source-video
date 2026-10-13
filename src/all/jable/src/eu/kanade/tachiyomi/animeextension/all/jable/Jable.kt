@@ -61,7 +61,7 @@ abstract class Jable : AnimeHttpSource() {
 
     override fun hosterListParse(response: Response): List<Hoster> {
         val doc = response.asJsoup()
-        val videoUrl = doc.selectFirst("script:containsData(var hlsUrl)")!!.data()
+        val videoUrl = (doc.selectFirst("script:containsData(var hlsUrl)") ?: throw Exception("Video source not found")).data()
             .substringAfter("var hlsUrl = '").substringBefore("'")
         val video = Video(videoUrl = videoUrl, videoTitle = "Default", headers = headers, initialized = true)
         return listOf(video).toHosterList()

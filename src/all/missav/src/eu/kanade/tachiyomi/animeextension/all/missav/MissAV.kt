@@ -167,7 +167,7 @@ abstract class MissAV :
         val animes = response.body.string().parseAs<List<RelatedResponse>>()
             .flatMap { it.toAnimeList() }
             .distinctBy { it.url }
-        return listOf(AnimeRelation("Related", animes))
+        return if (animes.isEmpty()) emptyList() else listOf(AnimeRelation("Related", animes))
     }
 
     override fun getFilterList() = getFilters()

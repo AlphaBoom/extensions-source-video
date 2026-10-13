@@ -134,16 +134,18 @@ abstract class Cycity :
     )
 
     override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request {
-        val zoneId = filters.selected<ZoneFilter>().ifEmpty { "1" }
+        val zoneId = filters.selected<ZoneFilter>()
         if (query.isNotBlank()) {
+            // 搜索接口的 zone_id 可选，未选频道时搜索全部频道
             val url = api("videos/search")
                 .addQueryParameter("q", query.trim())
-                .addQueryParameter("zone_id", zoneId)
+                .apply { if (zoneId.isNotEmpty()) addQueryParameter("zone_id", zoneId) }
                 .addQueryParameter("page", "$page")
                 .addQueryParameter("page_size", "$PAGE_SIZE")
             return GET(url.build(), apiHeaders)
         }
-        return videoListRequest(page, zoneId, filters.selected<SortFilter>().ifEmpty { "update_time" }) {
+        // 列表接口必须指定频道，未选时默认 TV番组
+        return videoListRequest(page, zoneId.ifEmpty { "1" }, filters.selected<SortFilter>().ifEmpty { "update_time" }) {
             filters.selected<CategoryFilter>().takeIf { it.isNotEmpty() }?.let { addQueryParameter("tag", it) }
             filters.selected<YearFilter>().takeIf { it.isNotEmpty() }?.let { addQueryParameter("year", it) }
         }

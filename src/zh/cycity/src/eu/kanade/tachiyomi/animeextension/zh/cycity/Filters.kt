@@ -11,7 +11,7 @@ open class SelectFilter(
 }
 
 // Zone ids and categories come from /api/video-zones.
-class ZoneFilter : SelectFilter("频道", arrayOf("TV番组" to "1", "剧场番组" to "2"))
+class ZoneFilter : SelectFilter("频道", arrayOf("全部" to "", "TV番组" to "1", "剧场番组" to "2"))
 
 class CategoryFilter :
     SelectFilter(
