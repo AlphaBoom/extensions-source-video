@@ -143,10 +143,10 @@
   {
     "name": "Aniyomi: Xfani",
     "pkg": "eu.kanade.tachiyomi.animeextension.zh.xfani",
-    "apk": "aniyomi-zh.xfani-v14.9.apk",
+    "apk": "aniyomi-zh.xfani-v14.10.apk",
     "lang": "zh",
-    "code": 9,
-    "version": "14.9",
+    "code": 10,
+    "version": "14.10",
     "nsfw": 0,
     "hasReadme": 0,
     "hasChangelog": 0,
@@ -155,7 +155,7 @@
         "name": "稀饭动漫",
         "lang": "zh",
         "id": "8868273686324481907",
-        "baseUrl": "https://anime.xifanacg.com",
+        "baseUrl": "https://next.xifanacg.com",
         "versionId": 1
       }
     ]
