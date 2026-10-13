@@ -238,9 +238,11 @@ abstract class MissAV :
     override fun List<Video>.sortVideos(): List<Video> {
         val quality = preferences.getString(PREF_QUALITY, PREF_QUALITY_DEFAULT)!!
 
+        // Preferred quality first, then the highest resolution.
         return sortedWith(
-            compareBy { it.videoTitle.contains(quality) },
-        ).reversed()
+            compareByDescending<Video> { it.videoTitle.contains(quality) }
+                .thenByDescending { it.resolution ?: it.videoTitle.filter(Char::isDigit).toIntOrNull() ?: 0 },
+        )
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
