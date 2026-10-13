@@ -20,6 +20,12 @@ remain `compileOnly`. Coroutines 1.10.2, serialization 1.9.0, OkHttp 5.4.0,
 jsoup 1.22.2, NanoHTTPD 2.3.1, Mihon's Injekt and Cash QuickJS match Aniyomi's runtime rather than
 the different versions in the manga host.
 
+NanoHTTPD is only safe to use through the API's `HttpServer`. Aniyomi's release
+build is minified without keep rules for `fi.iki.elonen`, so members the host
+does not call itself are stripped. Libraries that use NanoHTTPD directly, such
+as `lib/hls-proxy`, bundle it with `implementation`; the child-first extension
+class loader then prefers the bundled copy.
+
 ## Build
 
 Install JDK 25 and Android SDK packages `platforms;android-37.0` and
