@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "RouVideo"
-    versionCode = 18
+    versionCode = 19
     contentWarning = ContentWarning.NSFW
 
     deeplink {

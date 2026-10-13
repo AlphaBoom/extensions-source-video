@@ -101,7 +101,9 @@ internal class HlsProxyServer(
                 httpSession = httpSession,
                 proxySession = proxySession,
                 context = context,
-                forceFullResource = bodyTransformers.isNotEmpty(),
+                // Playlists are rewritten, so a byte range of the upstream body (and its
+                // Content-Range) does not describe the response; always fetch them whole.
+                forceFullResource = bodyTransformers.isNotEmpty() || resource.kind == HlsResourceKind.PLAYLIST,
             )
         val upstream = execute(request)
         val responseContext = context.copy(url = upstream.request.url.toString())
