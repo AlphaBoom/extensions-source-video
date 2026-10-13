@@ -10,7 +10,6 @@ import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.FormBody
 import okhttp3.Headers
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -112,9 +111,10 @@ object JavCoverFetcher {
         val document = response.asJsoup()
 
         val href = document.selectFirst("a.result-link")?.attr("href") ?: return null
-        // Results may be DuckDuckGo redirects (`//duckduckgo.com/l/?uddg=<encoded target>`).
-        val absolute = if (href.startsWith("//")) "https:$href" else href
-        return absolute.toHttpUrlOrNull()?.queryParameter("uddg") ?: href
+        // Results may be DuckDuckGo redirects (`/l/?uddg=<encoded target>`, possibly protocol- or
+        // root-relative); resolve against the results page before reading the target.
+        val link = response.request.url.resolve(href) ?: return href
+        return link.queryParameter("uddg") ?: link.toString()
     }
 
     private fun getHDCoverFromAmazonUrl(amazonUrl: String): String? {
