@@ -312,7 +312,10 @@ abstract class Hanime1 :
     private fun thumbnailInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val match = THUMBNAIL_PATH_REGEX.matchEntire(request.url.encodedPath)
-        if (match == null || !request.url.host.endsWith(THUMBNAIL_HOST)) return chain.proceed(request)
+        // A cache-only load must not reach out for a watch page.
+        if (match == null || !request.url.host.endsWith(THUMBNAIL_HOST) || request.cacheControl.onlyIfCached) {
+            return chain.proceed(request)
+        }
         val (videoId, suffix) = match.destructured
 
         if (!request.url.isThumbnailExpired()) {
