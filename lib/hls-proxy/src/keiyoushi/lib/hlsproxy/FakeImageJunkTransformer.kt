@@ -38,6 +38,8 @@ object FakeImageJunkTransformer : HlsBodyTransformer {
 private object FakeImageJunkDetector {
     fun detect(data: ByteArray): List<IntRange> {
         if (data.size < 3) return emptyList()
+        // Image magic bytes can occur by chance inside compressed media; leave clean TS untouched.
+        if (data.isPacketAlignedMpegTs()) return emptyList()
 
         val ranges = mutableListOf<IntRange>()
         var index = 0
@@ -123,6 +125,16 @@ private object FakeImageJunkDetector {
         this[start + 9] == 'V'.code.toByte() &&
         this[start + 10] == 'I'.code.toByte() &&
         this[start + 11] == ' '.code.toByte()
+
+    private fun ByteArray.isPacketAlignedMpegTs(): Boolean {
+        if (size < MPEG_TS_PACKET_SIZE || size % MPEG_TS_PACKET_SIZE != 0) return false
+        var index = 0
+        while (index < size) {
+            if (this[index] != MPEG_TS_SYNC) return false
+            index += MPEG_TS_PACKET_SIZE
+        }
+        return true
+    }
 
     private fun List<IntRange>.merge(): List<IntRange> {
         if (isEmpty()) return emptyList()
