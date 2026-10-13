@@ -3,8 +3,9 @@ plugins {
 }
 
 dependencies {
-    // Aniyomi's release build is minified without keep rules for NanoHTTPD, so
-    // members the host never calls (e.g. newChunkedResponse) are stripped. The
-    // child-first extension class loader uses this bundled copy instead.
+    // Aniyomi's release build contains NanoHTTPD, but R8 optimizes it without keep
+    // rules: in v0.18.2.1 the NanoHTTPD(String, int) constructor, the
+    // IHTTPSession getters and Response.addHeader no longer exist. The child-first
+    // extension class loader uses this bundled copy instead.
     implementation(libs.nanohttpd)
 }

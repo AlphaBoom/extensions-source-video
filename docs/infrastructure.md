@@ -33,10 +33,15 @@ Mihon's Injekt and Cash QuickJS match Aniyomi's runtime rather than the manga ho
 
 Aniyomi's release build is minified and only keeps the public API of the packages
 listed in its R8 rules (OkHttp, okio, jsoup, kotlinx, Injekt, QuickJS…). Anything else
-the host happens to contain, such as NanoHTTPD or `com.squareup.zstd`, may have unused
-members stripped, so extensions must bundle such libraries (`implementation`) or avoid
-them. `lib/hls-proxy` bundles NanoHTTPD; the child-first extension class loader prefers
-the bundled copy.
+the host happens to contain, such as NanoHTTPD or `com.squareup.zstd`, is shrunk and
+optimized for the host's own use, so extensions must bundle such libraries
+(`implementation`) or avoid them. In the v0.18.2.1 release, NanoHTTPD is present but its
+constructors were inlined into `HttpServer`, `IHTTPSession` has no methods left, and
+`Response.addHeader` and `Status.lookup` were removed. `lib/hls-proxy` therefore bundles
+NanoHTTPD; the child-first extension class loader prefers the bundled copy. For the
+same reason, a `createHttpServer()` subclass that reads the request
+(`session.uri`, `session.headers`) cannot work on release builds until Aniyomi keeps
+`fi.iki.elonen.**`.
 
 ## Build
 
