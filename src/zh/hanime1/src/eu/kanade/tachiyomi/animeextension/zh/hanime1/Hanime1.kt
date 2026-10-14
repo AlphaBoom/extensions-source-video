@@ -109,12 +109,8 @@ abstract class Hanime1 :
                                 videoTitle,
                                 AnimeFilterList(GenreFilter(arrayOf("", type)).apply { state = 1 }),
                             )
-                        // The watch page doesn't list that cover, so keep the search to refresh the link later.
-                        thumbnail_url =
-                            animesPage.animes
-                                .first()
-                                .thumbnail_url
-                                ?.withSeriesCoverSearch(type, videoTitle)
+                        // The link carries the search that lists it, see searchAnimeParse.
+                        thumbnail_url = animesPage.animes.first().thumbnail_url
                     } catch (e: Exception) {
                         Log.e(name, "Failed to get bangumi cover image", e)
                     }
@@ -206,11 +202,17 @@ abstract class Hanime1 :
                     }
                 }
             } else {
+                // Only a bangumi genre search lists these portrait covers, so keep it to refresh the link later.
+                val type = response.request.url.queryParameter("genre")?.let(BANGUMI_TYPES::get)
                 jsoup.select("a:not([target]) > .search-videos").map {
                     SAnime.create().apply {
                         setUrlWithoutDomain(it.parent()!!.attr("href"))
-                        thumbnail_url = it.select("img").attr("src")
-                        title = it.select(".home-rows-videos-title").text().appendInvisibleChar()
+                        val cardTitle = it.select(".home-rows-videos-title").text()
+                        thumbnail_url =
+                            it.select("img").attr("src").let { cover ->
+                                if (type == null || cardTitle.isEmpty()) cover else cover.withSeriesCoverSearch(type, cardTitle)
+                            }
+                        title = cardTitle.appendInvisibleChar()
                     }
                 }
             }
@@ -309,9 +311,10 @@ abstract class Hanime1 :
      *  - a bangumi entry shows the portrait cover (`/image/cover/<id>`) of the genre search's first result.
      *    A 裏番 episode has its own cover; 泡麵番 episodes share the first episode's. Neither is on the
      *    video's own watch page (a 泡麵番 one may be, through a sibling in the related list), but the genre
-     *    search lists it. Covers saved since this was added carry that search in the link's fragment
-     *    (never sent to the server); older ones are traced through the watch page of the video id in
-     *    their path, whose title gives the search. Old videos' covers have random ids and need a details refresh.
+     *    search lists it, as do results saved straight from such a search. Covers saved since this was
+     *    added carry that search in the link's fragment (never sent to the server); older ones are traced
+     *    through the watch page of the video id in their path, whose title gives the search. Old videos'
+     *    covers have random ids and need a details refresh.
      */
     private val freshThumbnails = ConcurrentHashMap<String, String>()
     private val thumbnailLocks = Array(THUMBNAIL_LOCK_STRIPES) { ReentrantLock() }
