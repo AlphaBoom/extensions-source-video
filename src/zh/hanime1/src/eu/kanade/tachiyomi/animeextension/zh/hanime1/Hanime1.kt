@@ -33,9 +33,12 @@ import okhttp3.Cookie
 import okhttp3.Dispatcher
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
@@ -96,18 +99,22 @@ abstract class Hanime1 :
             title = realTitle.appendInvisibleChar()
             description = caption?.text().orEmpty()
             thumbnail_url = doc.select("video[poster]").attr("poster")
-            val type = doc.select("a#video-artist-name + a").text().trim()
-            if (type == "裏番" || type == "泡麵番") {
-                // Use the series cover image for bangumi entries instead of the episode image.
+            doc.bangumiInfo()?.let { (type, videoTitle) ->
+                // Use the portrait cover of bangumi entries instead of the episode image.
                 runBlocking {
                     try {
                         val animesPage =
                             getSearchAnime(
                                 1,
-                                realTitle,
+                                videoTitle,
                                 AnimeFilterList(GenreFilter(arrayOf("", type)).apply { state = 1 }),
                             )
-                        thumbnail_url = animesPage.animes.first().thumbnail_url
+                        // The watch page doesn't list that cover, so keep the search to refresh the link later.
+                        thumbnail_url =
+                            animesPage.animes
+                                .first()
+                                .thumbnail_url
+                                ?.withSeriesCoverSearch(type, videoTitle)
                     } catch (e: Exception) {
                         Log.e(name, "Failed to get bangumi cover image", e)
                     }
@@ -291,23 +298,32 @@ abstract class Hanime1 :
     // ============================== Thumbnails ==============================
 
     /*
-     * Thumbnails are signed CDN links (`?secure=<sig>,<expiry>`) valid for at most ~30 days, and the
+     * Covers are signed CDN links (`?secure=<sig>,<expiry>`) valid for at most ~30 days, and the
      * library keeps whatever link was saved. An expired link is swapped at request time for a fresh one
-     * from the video's watch page. The image is still cached under the saved link, so each cover is
-     * refreshed at most once while it stays cached. Links found on a fetched watch page (including
-     * related videos) are kept in memory so concurrent or repeated loads don't fetch it again.
+     * of the same image. The image is still cached under the saved link, so each cover is refreshed at
+     * most once while it stays cached. Every signed link found on a fetched page is kept in memory,
+     * keyed by its path, so concurrent or repeated loads don't fetch that page again.
+     *
+     * Where the fresh link comes from depends on the cover:
+     *  - an episode image (`/image/thumbnail/<id>`) is on that video's watch page;
+     *  - a bangumi entry shows the portrait cover (`/image/cover/<id>`) of the genre search's first result.
+     *    A 裏番 episode has its own cover; 泡麵番 episodes share the first episode's. Neither is on the
+     *    video's own watch page (a 泡麵番 one may be, through a sibling in the related list), but the genre
+     *    search lists it. Covers saved since this was added carry that search in the link's fragment
+     *    (never sent to the server); older ones are traced through the watch page of the video id in
+     *    their path, whose title gives the search. Old videos' covers have random ids and need a details refresh.
      */
     private val freshThumbnails = ConcurrentHashMap<String, String>()
     private val thumbnailLocks = Array(THUMBNAIL_LOCK_STRIPES) { ReentrantLock() }
 
-    // The cover request waits for the watch page while holding a slot of the shared dispatcher, so the
+    // The cover request waits for the page while holding a slot of the shared dispatcher, so the
     // nested request runs on its own dispatcher to never queue behind those slots.
     private val watchPageClient by lazy { client.newBuilder().dispatcher(Dispatcher()).build() }
     private val watchPageFetches = Semaphore(MAX_THUMBNAIL_REFRESHES)
 
-    /** Remembers every signed thumbnail link in [text] and returns them keyed by `<id><suffix>`. */
+    /** Remembers every signed cover link in [text] and returns them keyed by path. */
     private fun rememberThumbnails(text: String): Map<String, String> {
-        val found = THUMBNAIL_URL_REGEX.findAll(text).associate { it.groupValues[1] + it.groupValues[2] to it.value }
+        val found = SIGNED_IMAGE_URL_REGEX.findAll(text).associate { it.groupValues[1] to it.value }
         // Eviction and insertion happen under one lock so a concurrent refresh can't wipe what was just added.
         synchronized(freshThumbnails) {
             if (freshThumbnails.size + found.size > MAX_REMEMBERED_THUMBNAILS) freshThumbnails.clear()
@@ -327,24 +343,22 @@ abstract class Hanime1 :
 
     private fun thumbnailInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val match = THUMBNAIL_PATH_REGEX.matchEntire(request.url.encodedPath)
-        // A cache-only load must not reach out for a watch page.
-        if (match == null || !request.url.host.endsWith(THUMBNAIL_HOST) || request.cacheControl.onlyIfCached) {
+        val url = request.url
+        // A cache-only load must not reach out for another page.
+        if (!url.host.endsWith(THUMBNAIL_HOST) || !url.encodedPath.startsWith("/image/") || request.cacheControl.onlyIfCached) {
             return chain.proceed(request)
         }
-        val (videoId, suffix) = match.destructured
-
-        val key = videoId + suffix
-        if (!request.url.isThumbnailExpired()) {
+        val key = url.encodedPath
+        if (!url.isThumbnailExpired()) {
             val response = chain.proceed(request)
             // The site may re-sign before the expiry it advertised.
             if (response.code != 403) return response
             response.close()
             freshThumbnails.remove(key)
         }
-        // A remembered link can be re-signed early too: drop it and fetch the watch page once more.
+        // A remembered link can be re-signed early too: drop it and fetch its page once more.
         repeat(MAX_THUMBNAIL_ATTEMPTS) { attempt ->
-            val freshUrl = freshThumbnailUrl(videoId, suffix, chain.call())
+            val freshUrl = freshThumbnailUrl(url, chain.call())
             if (chain.call().isCanceled()) throw IOException("Canceled")
             if (freshUrl == null) return chain.proceed(request)
             val response = chain.proceed(request.newBuilder().url(freshUrl).build())
@@ -355,33 +369,54 @@ abstract class Hanime1 :
         error("unreachable")
     }
 
-    /** Returns a valid signed link, or null if none was found or [outer] was canceled while waiting. */
+    /** Returns a valid signed link for [url]'s image, or null if none was found or [outer] was canceled. */
     private fun freshThumbnailUrl(
-        videoId: String,
-        suffix: String,
+        url: HttpUrl,
         outer: Call,
     ): String? {
-        fun cached() = freshThumbnails[videoId + suffix]?.takeUnless { it.toHttpUrl().isThumbnailExpired() }
+        val key = url.encodedPath
+
+        fun cached() = freshThumbnails[key]?.takeUnless { it.toHttpUrl().isThumbnailExpired() }
 
         cached()?.let { return it }
-        val lock = thumbnailLocks[Math.floorMod(videoId.hashCode(), THUMBNAIL_LOCK_STRIPES)]
+        val lock = thumbnailLocks[Math.floorMod(key.hashCode(), THUMBNAIL_LOCK_STRIPES)]
         if (!awaitUnlessCanceled(outer) { lock.tryLock(CANCEL_POLL_MILLIS, TimeUnit.MILLISECONDS) }) return null
         try {
             cached()?.let { return it }
             if (!awaitUnlessCanceled(outer) { watchPageFetches.tryAcquire(CANCEL_POLL_MILLIS, TimeUnit.MILLISECONDS) }) return null
             try {
-                if (outer.isCanceled()) return null
-                // Use what this fetch found rather than re-reading the shared map.
-                return fetchWatchPage(videoId, outer)
-                    ?.let(::rememberThumbnails)
-                    ?.get(videoId + suffix)
-                    ?.takeUnless { it.toHttpUrl().isThumbnailExpired() }
+                return findFreshThumbnail(url, outer)
             } finally {
                 watchPageFetches.release()
             }
         } finally {
             lock.unlock()
         }
+    }
+
+    private fun findFreshThumbnail(
+        url: HttpUrl,
+        outer: Call,
+    ): String? {
+        val key = url.encodedPath
+
+        // Use what each fetch found rather than re-reading the shared map.
+        fun String?.freshLink() = this
+            ?.let(::rememberThumbnails)
+            ?.get(key)
+            ?.takeUnless { it.toHttpUrl().isThumbnailExpired() }
+
+        url.seriesCoverSearch()?.let { (type, title) ->
+            fetchPage(seriesSearchRequest(type, title), outer).freshLink()?.let { return it }
+        }
+        if (outer.isCanceled()) return null
+        val videoId = THUMBNAIL_PATH_REGEX.matchEntire(key)?.groupValues?.get(1) ?: return null
+        val watchPage = fetchPage(GET("$baseUrl/watch?v=$videoId", headers), outer) ?: return null
+        watchPage.freshLink()?.let { return it }
+        // A bangumi cover saved before the search was recorded: find it the way animeDetailsParse did.
+        if (outer.isCanceled()) return null
+        val (type, title) = Jsoup.parse(watchPage, baseUrl).bangumiInfo() ?: return null
+        return fetchPage(seriesSearchRequest(type, title), outer).freshLink()
     }
 
     /** Retries [attempt] until it succeeds; gives up once [outer] is canceled. */
@@ -395,12 +430,12 @@ abstract class Hanime1 :
         return true
     }
 
-    /** Fetches the watch page, canceling the request if [outer] is canceled meanwhile. */
-    private fun fetchWatchPage(
-        videoId: String,
+    /** Fetches [request]'s page, canceling it if [outer] is canceled meanwhile. */
+    private fun fetchPage(
+        request: Request,
         outer: Call,
     ): String? {
-        val call = watchPageClient.newCall(GET("$baseUrl/watch?v=$videoId", headers))
+        val call = watchPageClient.newCall(request)
         val page = CompletableFuture<String?>()
         call.enqueue(
             object : Callback {
@@ -408,7 +443,7 @@ abstract class Hanime1 :
                     call: Call,
                     e: IOException,
                 ) {
-                    if (!call.isCanceled()) Log.e(name, "Failed to refresh thumbnail of $videoId", e)
+                    if (!call.isCanceled()) Log.e(name, "Failed to refresh thumbnail from ${request.url}", e)
                     page.complete(null)
                 }
 
@@ -430,6 +465,38 @@ abstract class Hanime1 :
                 }
             }
         }
+    }
+
+    /** Genre and video title of a bangumi watch page, or null for other videos. */
+    private fun Document.bangumiInfo(): Pair<String, String>? {
+        // The label follows Accept-Language, but the genre search only takes the traditional name.
+        val type = BANGUMI_TYPES[select("a#video-artist-name + a").text().trim()] ?: return null
+        val title =
+            selectFirst("div.video-description-panel > .video-caption-text")
+                ?.previousElementSibling()
+                ?.text()
+                .orEmpty()
+        return if (title.isEmpty()) null else type to title
+    }
+
+    private fun seriesSearchRequest(
+        type: String,
+        title: String,
+    ): Request = searchAnimeRequest(1, title, AnimeFilterList(GenreFilter(arrayOf("", type)).apply { state = 1 }))
+
+    /** Records in the cover link (as a fragment, never sent) the genre search that lists it. */
+    private fun String.withSeriesCoverSearch(
+        type: String,
+        title: String,
+    ): String = toHttpUrlOrNull()
+        ?.newBuilder()
+        ?.fragment("$SERIES_COVER_FRAGMENT$type:$title")
+        ?.build()
+        ?.toString() ?: this
+
+    private fun HttpUrl.seriesCoverSearch(): Pair<String, String>? {
+        val parts = fragment?.removePrefix(SERIES_COVER_FRAGMENT)?.takeIf { it != fragment }?.split(':', limit = 2)
+        return if (parts?.size == 2 && parts.none { it.isEmpty() }) parts[0] to parts[1] else null
     }
 
     @OptIn(DelicateCoroutinesApi::class)
@@ -576,8 +643,12 @@ abstract class Hanime1 :
         private const val CANCEL_POLL_MILLIS = 200L
         private const val MAX_THUMBNAIL_ATTEMPTS = 2
         private const val THUMBNAIL_LOCK_STRIPES = 16
-        private val THUMBNAIL_PATH_REGEX = Regex("""/image/thumbnail/(\d+)([a-z]?)\.jpg""")
-        private val THUMBNAIL_URL_REGEX =
-            Regex("""https://[\w.-]*hembed\.com/image/thumbnail/(\d+)([a-z]?)\.jpg\?secure=[\w=-]+,\d+""")
+        private const val SERIES_COVER_FRAGMENT = "series="
+        private val BANGUMI_TYPES = mapOf("裏番" to "裏番", "里番" to "裏番", "泡麵番" to "泡麵番", "泡面番" to "泡麵番")
+
+        // Only newer videos name their images after the video id; older ones use random ids.
+        private val THUMBNAIL_PATH_REGEX = Regex("""/image/(?:thumbnail|cover)/(\d+)[a-z]?\.jpg""")
+        private val SIGNED_IMAGE_URL_REGEX =
+            Regex("""https://[\w.-]*hembed\.com(/image/[^"'\s?#<>]+)\?secure=[\w=-]+,\d+""")
     }
 }
