@@ -99,22 +99,22 @@ abstract class Hanime1 :
             title = realTitle.appendInvisibleChar()
             description = caption?.text().orEmpty()
             thumbnail_url = doc.select("video[poster]").attr("poster")
-            doc.bangumiInfo()?.let { (type, seriesTitle) ->
-                // Use the series cover image for bangumi entries instead of the episode image.
+            doc.bangumiInfo()?.let { (type, videoTitle) ->
+                // Use the portrait cover of bangumi entries instead of the episode image.
                 runBlocking {
                     try {
                         val animesPage =
                             getSearchAnime(
                                 1,
-                                seriesTitle,
+                                videoTitle,
                                 AnimeFilterList(GenreFilter(arrayOf("", type)).apply { state = 1 }),
                             )
-                        // Only that search lists the series cover, so keep it to refresh the link later.
+                        // The watch page doesn't list that cover, so keep the search to refresh the link later.
                         thumbnail_url =
                             animesPage.animes
                                 .first()
                                 .thumbnail_url
-                                ?.withSeriesCoverSearch(type, seriesTitle)
+                                ?.withSeriesCoverSearch(type, videoTitle)
                     } catch (e: Exception) {
                         Log.e(name, "Failed to get bangumi cover image", e)
                     }
@@ -306,9 +306,12 @@ abstract class Hanime1 :
      *
      * Where the fresh link comes from depends on the cover:
      *  - an episode image (`/image/thumbnail/<id>`) is on that video's watch page;
-     *  - a bangumi entry shows its series cover, which only the genre search lists. Covers saved since
-     *    this was added carry the search in the link's fragment (never sent to the server); older ones
-     *    are traced through the watch page of the video id in their path.
+     *  - a bangumi entry shows the portrait cover (`/image/cover/<id>`) of the genre search's first result.
+     *    A 裏番 episode has its own cover; 泡麵番 episodes share the first episode's. Neither is on the
+     *    video's own watch page (a 泡麵番 one may be, through a sibling in the related list), but the genre
+     *    search lists it. Covers saved since this was added carry that search in the link's fragment
+     *    (never sent to the server); older ones are traced through the watch page of the video id in
+     *    their path, whose title gives the search. Old videos' covers have random ids and need a details refresh.
      */
     private val freshThumbnails = ConcurrentHashMap<String, String>()
     private val thumbnailLocks = Array(THUMBNAIL_LOCK_STRIPES) { ReentrantLock() }
@@ -464,10 +467,10 @@ abstract class Hanime1 :
         }
     }
 
-    /** Genre and series title of a bangumi watch page, or null for other videos. */
+    /** Genre and video title of a bangumi watch page, or null for other videos. */
     private fun Document.bangumiInfo(): Pair<String, String>? {
-        val type = select("a#video-artist-name + a").text().trim()
-        if (type !in BANGUMI_TYPES) return null
+        // The label follows Accept-Language, but the genre search only takes the traditional name.
+        val type = BANGUMI_TYPES[select("a#video-artist-name + a").text().trim()] ?: return null
         val title =
             selectFirst("div.video-description-panel > .video-caption-text")
                 ?.previousElementSibling()
@@ -641,8 +644,10 @@ abstract class Hanime1 :
         private const val MAX_THUMBNAIL_ATTEMPTS = 2
         private const val THUMBNAIL_LOCK_STRIPES = 16
         private const val SERIES_COVER_FRAGMENT = "series="
-        private val BANGUMI_TYPES = setOf("裏番", "泡麵番")
-        private val THUMBNAIL_PATH_REGEX = Regex("""/image/thumbnail/(\d+)[a-z]?\.jpg""")
+        private val BANGUMI_TYPES = mapOf("裏番" to "裏番", "里番" to "裏番", "泡麵番" to "泡麵番", "泡面番" to "泡麵番")
+
+        // Only newer videos name their images after the video id; older ones use random ids.
+        private val THUMBNAIL_PATH_REGEX = Regex("""/image/(?:thumbnail|cover)/(\d+)[a-z]?\.jpg""")
         private val SIGNED_IMAGE_URL_REGEX =
             Regex("""https://[\w.-]*hembed\.com(/image/[^"'\s?#<>]+)\?secure=[\w=-]+,\d+""")
     }
