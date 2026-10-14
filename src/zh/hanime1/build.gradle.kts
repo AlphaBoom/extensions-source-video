@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Hanime1"
-    versionCode = 14
+    versionCode = 15
     contentWarning = ContentWarning.NSFW
 
     source {
