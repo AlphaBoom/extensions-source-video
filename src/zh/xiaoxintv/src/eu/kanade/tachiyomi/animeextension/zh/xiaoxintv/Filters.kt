@@ -8,7 +8,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
-private const val PREF_KEY_FILTER_CONFIG_PREFIX = "STORED_SEARCH_CONFIG"
+// V2: the site renumbered its categories; configs saved under the old ids are stale.
+private const val PREF_KEY_FILTER_CONFIG_PREFIX = "STORED_SEARCH_CONFIG_V2"
 
 open class PathFilter(
     name: String,
@@ -131,54 +132,78 @@ internal fun Iterable<SearchBean>.toPath(): String = this
 private val defaultLangList =
     listOf(
         SearchLang("全部", ignore = true),
-        SearchLang("国语"),
+        SearchLang("汉语普通话"),
         SearchLang("粤语"),
         SearchLang("英语"),
-        SearchLang("其他"),
+        SearchLang("日语"),
+        SearchLang("韩语"),
     )
 
 private val typeAll = SearchType("全部", "-1", ignore = true)
-private val categoryAll = SearchClass("全部", ignore = true)
 private val yearAll = SearchYear("全部", ignore = true)
 private val regionAll = SearchRegion("全部", ignore = true)
 
+// Fallback until the first visit of each category refreshes these from the site's filter panel.
 private val defaultSearchFilterConfig =
     mapOf(
         // anime
-        "5" to
+        "4" to
             SearchFilterConfig(
-                type = listOf(typeAll, SearchType("国产动漫", 51), SearchType("日本动漫", 52)),
-                category =
-                listOf(
-                    categoryAll,
-                    SearchClass("热血"),
-                    SearchClass("格斗"),
-                    SearchClass("其他"),
+                type = listOf(
+                    typeAll,
+                    SearchType("国产动漫", 40),
+                    SearchType("日韩动漫", 41),
+                    SearchType("欧美动漫", 42),
+                    SearchType("港台动漫", 43),
+                    SearchType("海外动漫", 44),
                 ),
                 year = listOf(yearAll),
                 lang = defaultLangList,
             ),
         // movie
-        "7" to
+        "1" to
             SearchFilterConfig(
-                type = listOf(typeAll),
+                type = listOf(
+                    typeAll,
+                    SearchType("动作片", 24),
+                    SearchType("喜剧片", 25),
+                    SearchType("科幻片", 26),
+                    SearchType("恐怖片", 27),
+                    SearchType("爱情片", 28),
+                    SearchType("剧情片", 29),
+                    SearchType("战争片", 30),
+                    SearchType("动画电影", 31),
+                ),
                 region = listOf(regionAll),
                 year = listOf(yearAll),
                 lang = defaultLangList,
             ),
         // tv
-        "6" to
+        "2" to
             SearchFilterConfig(
-                type = listOf(typeAll),
-                category = listOf(categoryAll),
+                type = listOf(
+                    typeAll,
+                    SearchType("国产剧", 32),
+                    SearchType("欧美剧", 33),
+                    SearchType("香港剧", 34),
+                    SearchType("韩国剧", 35),
+                    SearchType("台湾剧", 36),
+                    SearchType("日本剧", 37),
+                    SearchType("海外剧", 38),
+                ),
                 year = listOf(yearAll),
                 lang = defaultLangList,
             ),
         // variety show
         "3" to
             SearchFilterConfig(
-                type = listOf(typeAll),
-                category = listOf(categoryAll),
+                type = listOf(
+                    typeAll,
+                    SearchType("大陆综艺", 45),
+                    SearchType("港台综艺", 46),
+                    SearchType("日韩综艺", 47),
+                    SearchType("欧美综艺", 48),
+                ),
                 year = listOf(yearAll),
                 lang = defaultLangList,
             ),
@@ -189,11 +214,6 @@ private val defaultSearchFilterConfig =
                 region = listOf(regionAll),
                 year = listOf(yearAll),
                 lang = defaultLangList,
-            ),
-        // short show
-        "64" to
-            SearchFilterConfig(
-                type = listOf(typeAll),
             ),
     )
 
@@ -207,12 +227,11 @@ private fun genFilterConfigKey(majorTypeId: String): String = PREF_KEY_FILTER_CO
 
 internal val defaultMajorSearchTypeSet =
     arrayOf(
-        SearchType("动漫", 5),
-        SearchType("电影", 7),
-        SearchType("电视剧", 6),
+        SearchType("动漫", 4),
+        SearchType("电影", 1),
+        SearchType("电视剧", 2),
         SearchType("综艺", 3),
         SearchType("纪录片", 21),
-        SearchType("短剧", 64),
     )
 
 internal val defaultSortTypeSet =

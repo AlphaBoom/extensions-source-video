@@ -101,12 +101,22 @@ internal class HlsProxyServer(
                 httpSession = httpSession,
                 proxySession = proxySession,
                 context = context,
-                forceFullResource = bodyTransformers.isNotEmpty(),
+                // Playlists are rewritten, so a byte range of the upstream body (and its
+                // Content-Range) does not describe the response; always fetch them whole.
+                forceFullResource = bodyTransformers.isNotEmpty() || resource.kind == HlsResourceKind.PLAYLIST,
             )
         val upstream = execute(request)
         val responseContext = context.copy(url = upstream.request.url.toString())
 
         if (httpSession.method == Method.HEAD) {
+            if (resource.kind == HlsResourceKind.PLAYLIST && upstream.isSuccessful) {
+                return upstream.use {
+                    val body = rewritePlaylist(it, proxySession, resource, responseContext, bodyTransformers)
+                    newFixedLengthResponse(it.toProxyStatus(), HLS_MIME, ByteArrayInputStream(ByteArray(0)), 0)
+                        .apply { addHeader("Content-Length", body.size.toString()) }
+                        .copyPlaylistHeadersFrom(it)
+                }
+            }
             if (bodyTransformers.isNotEmpty() && upstream.isSuccessful) {
                 return upstream.use {
                     val body =
@@ -204,8 +214,20 @@ internal class HlsProxyServer(
         context: HlsResourceContext,
         transformers: List<HlsBodyTransformer>,
     ): Response = upstream.use {
+        val body = rewritePlaylist(it, proxySession, resource, context, transformers)
+        newFixedLengthResponse(it.toProxyStatus(), HLS_MIME, ByteArrayInputStream(body), body.size.toLong())
+            .copyPlaylistHeadersFrom(it)
+    }
+
+    private fun rewritePlaylist(
+        upstream: OkHttpResponse,
+        proxySession: ProxySession,
+        resource: ProxyResource,
+        context: HlsResourceContext,
+        transformers: List<HlsBodyTransformer>,
+    ): ByteArray {
         var playlist =
-            it.body
+            upstream.body
                 .bytes()
                 .applyTransformers(context, transformers)
                 .toString(Charsets.UTF_8)
@@ -229,13 +251,7 @@ internal class HlsProxyServer(
                     }
                 registerResource(proxySession, url, kind, depth)
             }
-
-        bytesResponse(
-            status = it.toProxyStatus(),
-            contentType = HLS_MIME,
-            body = rewritten.toByteArray(),
-            upstream = it,
-        )
+        return rewritten.toByteArray()
     }
 
     private fun resourceResponse(
@@ -284,18 +300,6 @@ internal class HlsProxyServer(
             }
         return response.copyHeadersFrom(upstream)
     }
-
-    private fun bytesResponse(
-        status: IStatus,
-        contentType: String,
-        body: ByteArray,
-        upstream: OkHttpResponse,
-    ): Response = newFixedLengthResponse(
-        status,
-        contentType,
-        ByteArrayInputStream(body),
-        body.size.toLong(),
-    ).copyHeadersFrom(upstream)
 
     private fun transformedBytesResponse(
         status: IStatus,
@@ -427,6 +431,15 @@ internal class HlsProxyServer(
         FORWARDED_RESPONSE_HEADERS.forEach { name ->
             upstream.header(name)?.let { addHeader(name, it) }
         }
+        addHeader("Cache-Control", upstream.header("Cache-Control") ?: "no-store")
+        return this
+    }
+
+    // A rewritten playlist is always served whole, so the upstream body's range headers don't apply.
+    private fun Response.copyPlaylistHeadersFrom(upstream: OkHttpResponse): Response {
+        FORWARDED_RESPONSE_HEADERS
+            .filterNot { it == "Content-Range" || it == "Accept-Ranges" }
+            .forEach { name -> upstream.header(name)?.let { addHeader(name, it) } }
         addHeader("Cache-Control", upstream.header("Cache-Control") ?: "no-store")
         return this
     }
