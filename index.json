@@ -1,11 +1,66 @@
 [
   {
+    "name": "Aniyomi: Jable",
+    "pkg": "eu.kanade.tachiyomi.animeextension.all.jable",
+    "apk": "aniyomi-all.jable-v17.3.apk",
+    "lang": "all",
+    "code": 17003,
+    "version": "17.3",
+    "nsfw": 1,
+    "hasReadme": 0,
+    "hasChangelog": 0,
+    "sources": [
+      {
+        "id": "4927468808524123411",
+        "name": "Jable",
+        "lang": "zh",
+        "baseUrl": "https://jable.tv"
+      },
+      {
+        "id": "889668913079212135",
+        "name": "Jable",
+        "lang": "en",
+        "baseUrl": "https://jable.tv"
+      },
+      {
+        "id": "7335707215680841826",
+        "name": "Jable",
+        "lang": "ja",
+        "baseUrl": "https://jable.tv"
+      }
+    ]
+  },
+  {
+    "name": "Aniyomi: MissAV",
+    "pkg": "eu.kanade.tachiyomi.animeextension.all.missav",
+    "apk": "aniyomi-all.missav-v17.33.apk",
+    "lang": "all",
+    "code": 17033,
+    "version": "17.33",
+    "nsfw": 1,
+    "hasReadme": 0,
+    "hasChangelog": 0,
+    "sources": [
+      {
+        "id": "168969881246615628",
+        "name": "MissAV",
+        "lang": "all",
+        "baseUrl": "https://missav.live",
+        "mirrorUrls": [
+          "https://missav.live",
+          "https://missav.ai",
+          "https://missav.ws"
+        ]
+      }
+    ]
+  },
+  {
     "name": "Aniyomi: RouVideo",
     "pkg": "eu.kanade.tachiyomi.animeextension.all.rouvideo",
-    "apk": "aniyomi-all.rouvideo-v17.18.apk",
+    "apk": "aniyomi-all.rouvideo-v17.19.apk",
     "lang": "all",
-    "code": 17018,
-    "version": "17.18",
+    "code": 17019,
+    "version": "17.19",
     "nsfw": 1,
     "hasReadme": 0,
     "hasChangelog": 0,
@@ -71,6 +126,25 @@
         "name": "Anime1.me",
         "lang": "zh-hant",
         "baseUrl": "https://anime1.me"
+      }
+    ]
+  },
+  {
+    "name": "Aniyomi: Cycity",
+    "pkg": "eu.kanade.tachiyomi.animeextension.zh.cycity",
+    "apk": "aniyomi-zh.cycity-v17.4.apk",
+    "lang": "zh",
+    "code": 17004,
+    "version": "17.4",
+    "nsfw": 0,
+    "hasReadme": 0,
+    "hasChangelog": 0,
+    "sources": [
+      {
+        "id": "4928029692398241219",
+        "name": "次元城动漫",
+        "lang": "zh",
+        "baseUrl": "https://www.cycani.org"
       }
     ]
   },
@@ -153,10 +227,10 @@
   {
     "name": "Aniyomi: Xiaoxintv",
     "pkg": "eu.kanade.tachiyomi.animeextension.zh.xiaoxintv",
-    "apk": "aniyomi-zh.xiaoxintv-v17.3.apk",
+    "apk": "aniyomi-zh.xiaoxintv-v17.4.apk",
     "lang": "zh",
-    "code": 17003,
-    "version": "17.3",
+    "code": 17004,
+    "version": "17.4",
     "nsfw": 0,
     "hasReadme": 0,
     "hasChangelog": 0,
